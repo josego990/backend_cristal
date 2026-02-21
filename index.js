@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
 const jwt = require('jsonwebtoken');
@@ -12,9 +13,12 @@ const expenses = require('./handlers/expenses.handlers');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const host = process.env.HOST || '0.0.0.0';
+const dbReconnectDelayMs = Number(process.env.DB_RECONNECT_DELAY_MS || 5000);
 
 let dbPool;
 let httpServer;
+let dbConnecting = false;
 
 function toBool(value, defaultValue) {
   if (value === undefined || value === null || String(value).trim() === '') {
@@ -38,6 +42,8 @@ function getSqlConfig() {
     server: process.env.DB_SERVER,
     database: process.env.DB_DATABASE,
     port: Number(process.env.DB_PORT || 1433),
+    connectionTimeout: Number(process.env.DB_CONNECTION_TIMEOUT_MS || 15000),
+    requestTimeout: Number(process.env.DB_REQUEST_TIMEOUT_MS || 30000),
     options: {
       encrypt: toBool(process.env.DB_ENCRYPT, false),
       trustServerCertificate: toBool(process.env.DB_TRUST_SERVER_CERTIFICATE, true)
@@ -147,6 +153,15 @@ app.get('/health', (req, res) => {
   return res.json({
     ok: true,
     service: 'opticas-cristal-backend',
+    dbConnected: Boolean(dbPool),
+    now: new Date().toISOString()
+  });
+});
+
+app.get('/api-prueba-servicio', (req, res) => {
+  return res.json({
+    ok: true,
+    message: 'Servicio activo',
     now: new Date().toISOString()
   });
 });
@@ -197,12 +212,39 @@ async function start() {
     throw new Error(`Faltan variables de entorno: ${missingEnv.join(', ')}`);
   }
 
-  dbPool = await new sql.ConnectionPool(getSqlConfig()).connect();
-  console.log('DB conectada');
-
-  httpServer = app.listen(port, () => {
-    console.log(`API escuchando en puerto ${port}`);
+  httpServer = app.listen(port, host, () => {
+    console.log(`API escuchando en ${host}:${port}`);
   });
+
+  await connectDb();
+}
+
+async function connectDb() {
+  if (dbPool || dbConnecting) return;
+
+  dbConnecting = true;
+  console.log('Conectando a DB...');
+
+  try {
+    const pool = await new sql.ConnectionPool(getSqlConfig()).connect();
+    dbPool = pool;
+    console.log('DB conectada');
+
+    pool.on('error', (error) => {
+      console.error('Error en pool DB:', error);
+      dbPool = null;
+      setTimeout(() => {
+        connectDb().catch((err) => console.error('Reconexion DB fallida:', err));
+      }, dbReconnectDelayMs);
+    });
+  } catch (error) {
+    console.error('No se pudo conectar a DB:', error);
+    setTimeout(() => {
+      connectDb().catch((err) => console.error('Reconexion DB fallida:', err));
+    }, dbReconnectDelayMs);
+  } finally {
+    dbConnecting = false;
+  }
 }
 
 async function shutdown(signal) {
