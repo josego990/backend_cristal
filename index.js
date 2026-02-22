@@ -99,6 +99,18 @@ const allowAllOrigins =
   allowedOrigins.includes('*') ||
   allowedOrigins.includes('all');
 
+function wildcardToRegExp(pattern) {
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}$`, 'i');
+}
+
+function isWildcardAllowed(origin) {
+  if (!origin) return false;
+  return allowedOrigins
+    .filter((p) => p.includes('*'))
+    .some((pattern) => wildcardToRegExp(pattern).test(origin));
+}
+
 function isLocalDevOrigin(origin) {
   if (!origin) return false;
 
@@ -124,6 +136,7 @@ app.use((req, res, next) => {
     !origin ||
     origin === 'null' ||
     allowedOrigins.includes(origin) ||
+    isWildcardAllowed(origin) ||
     isLocalDevOrigin(origin);
 
   if (isAllowed) {
@@ -269,7 +282,7 @@ async function shutdown(signal) {
 process.on('SIGINT', () => {
   shutdown('SIGINT').catch((error) => {
     console.error('Error al cerrar:', error);
-    process.exit(1);
+    process.exit(1); 
   });
 });
 
