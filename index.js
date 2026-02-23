@@ -10,6 +10,9 @@ const dashboard = require('./handlers/dashboard.handlers');
 const patients = require('./handlers/patients.handlers');
 const quotations = require('./handlers/quotations.handlers');
 const expenses = require('./handlers/expenses.handlers');
+const users = require('./handlers/users.handlers');
+const inventory = require('./handlers/inventory.handlers');
+const clinics = require('./handlers/clinics.handlers');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -209,10 +212,22 @@ app.get('/api/quotations/:id', authMiddleware, quotations.getById);
 app.post('/api/expenses', authMiddleware, expenses.create);
 app.get('/api/expenses', authMiddleware, expenses.list);
 
+app.post('/api/users', authMiddleware, users.create);
+app.get('/api/users', authMiddleware, users.list);
+app.put('/api/users/:id', authMiddleware, users.update);
+
+app.post('/api/inventory', authMiddleware, inventory.create);
+app.get('/api/inventory', authMiddleware, inventory.list);
+app.put('/api/inventory/:id', authMiddleware, inventory.update);
+app.post('/api/inventory/:id/decrement', authMiddleware, inventory.decrement);
+
+app.post('/api/clinics', authMiddleware, clinics.create);
+app.get('/api/clinics', authMiddleware, clinics.list);
+
 app.use((req, res) => {
   return res.status(404).json({ message: 'Ruta no encontrada' });
 });
-
+ 
 app.use((err, req, res, next) => {
   const status = err?.status || 500;
   const message = err?.message || 'Error interno';

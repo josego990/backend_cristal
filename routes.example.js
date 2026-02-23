@@ -6,6 +6,9 @@ const dashboard = require('./handlers/dashboard.handlers');
 const patients = require('./handlers/patients.handlers');
 const quotations = require('./handlers/quotations.handlers');
 const expenses = require('./handlers/expenses.handlers');
+const users = require('./handlers/users.handlers');
+const inventory = require('./handlers/inventory.handlers');
+const clinics = require('./handlers/clinics.handlers');
 
 module.exports = function registerRoutes(app, authMiddleware){
   // Auth
@@ -32,4 +35,19 @@ module.exports = function registerRoutes(app, authMiddleware){
   // Gastos
   app.post('/api/expenses', authMiddleware, expenses.create);
   app.get('/api/expenses', authMiddleware, expenses.list);
+
+  // Usuarios
+  app.post('/api/users', authMiddleware, users.create);
+  app.get('/api/users', authMiddleware, users.list);
+  app.put('/api/users/:id', authMiddleware, users.update);
+
+  // Inventario
+  app.post('/api/inventory', authMiddleware, inventory.create);
+  app.get('/api/inventory', authMiddleware, inventory.list);
+  app.put('/api/inventory/:id', authMiddleware, inventory.update);
+  app.post('/api/inventory/:id/decrement', authMiddleware, inventory.decrement);
+
+  // Clinicas
+  app.post('/api/clinics', authMiddleware, clinics.create);
+  app.get('/api/clinics', authMiddleware, clinics.list);
 };
