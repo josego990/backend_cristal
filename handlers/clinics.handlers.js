@@ -18,6 +18,12 @@ function toBit(v) {
   return null;
 }
 
+function toPositiveInt(v) {
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1) return null;
+  return n;
+}
+
 function isDuplicateError(err) {
   const number = Number(
     err?.number ??
@@ -160,4 +166,84 @@ Response example (200):
 ]
 */
 
-module.exports = { create, list };
+/** GET /api/clinics/user/:userId */
+async function listByUserId(req, res) {
+  try {
+    const userId = toPositiveInt(req.params.userId);
+    if (!userId) return res.status(400).json({ message: 'userId invalido' });
+
+    const userCheck = await req.db
+      .request()
+      .input('UserId', req.sql.Int, userId)
+      .query(
+        `
+        SELECT TOP (1) UserId
+        FROM dbo.Users
+        WHERE UserId = @UserId
+        `
+      );
+
+    if (!userCheck.recordset?.[0]) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    const r = await req.db
+      .request()
+      .input('UserId', req.sql.Int, userId)
+      .query(
+        `
+        ;WITH assigned AS (
+          SELECT uc.ClinicId
+          FROM dbo.UserClinics uc
+          WHERE uc.UserId = @UserId
+        ),
+        fallbackPrimary AS (
+          SELECT u.IdClinica AS ClinicId
+          FROM dbo.Users u
+          WHERE u.UserId = @UserId
+            AND u.IdClinica IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM assigned)
+        ),
+        clinicIds AS (
+          SELECT ClinicId FROM assigned
+          UNION
+          SELECT ClinicId FROM fallbackPrimary
+        )
+        SELECT
+          c.ClinicId,
+          c.Codigo,
+          c.Nombre,
+          c.Estado,
+          c.CreatedAt,
+          c.UpdatedAt
+        FROM clinicIds ids
+        INNER JOIN dbo.Clinics c
+          ON c.ClinicId = ids.ClinicId
+        ORDER BY c.ClinicId
+        `
+      );
+
+    return res.json((r.recordset || []).map((x) => sanitizeClinic(x)));
+  } catch (err) {
+    return res.status(500).json({ message: err.message || 'Error' });
+  }
+}
+/*
+Request example:
+GET /api/clinics/user/10
+Authorization: Bearer <token>
+
+Response example (200):
+[
+  {
+    "clinicId": 1,
+    "codigo": "CLN-001",
+    "nombre": "Clinica Central",
+    "estado": true,
+    "createdAt": "2026-02-23T20:10:00.000Z",
+    "updatedAt": null
+  }
+]
+*/
+
+module.exports = { create, list, listByUserId };

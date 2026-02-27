@@ -40,16 +40,30 @@ async function login(req, res){
       return res.status(401).json({ message: 'Credenciales inválidas' });
     }
 
+    const rol = user.Rol === null || user.Rol === undefined ? null : String(user.Rol).trim();
     const secret = process.env.JWT_SECRET || 'DEV_ONLY_CHANGE_ME';
     const token = jwt.sign(
-      { sub: user.UserId, username: user.Username, name: user.FullName },
+      {
+        sub: user.UserId,
+        userId: user.UserId,
+        username: user.Username,
+        name: user.FullName,
+        fullName: user.FullName,
+        rol
+      },
       secret,
       { expiresIn: '12h' }
     );
 
     return res.json({
       token,
-      user: { userId: user.UserId, username: user.Username, name: user.FullName }
+      user: {
+        userId: user.UserId,
+        username: user.Username,
+        name: user.FullName,
+        fullName: user.FullName,
+        rol
+      }
     });
 
   }catch(err){

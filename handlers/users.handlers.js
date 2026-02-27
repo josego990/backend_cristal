@@ -1,9 +1,11 @@
 const bcrypt = require('bcryptjs');
 
 const INVALID_NUMBER = Symbol('invalid_number');
+const INVALID_VALUE = Symbol('invalid_value');
 const BCRYPT_ROUNDS_RAW = Number(process.env.BCRYPT_ROUNDS || 10);
 const BCRYPT_ROUNDS =
   Number.isInteger(BCRYPT_ROUNDS_RAW) && BCRYPT_ROUNDS_RAW > 3 ? BCRYPT_ROUNDS_RAW : 10;
+const ALLOWED_ROLES = ['SuperAdmin', 'Administrador', 'Empleado'];
 
 function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
@@ -13,13 +15,6 @@ function toText(v) {
   const s = v === null || v === undefined ? '' : String(v);
   const t = s.trim();
   return t.length ? t : null;
-}
-
-function parseNullablePositiveInt(v) {
-  if (v === null || v === undefined || String(v).trim() === '') return null;
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1) return INVALID_NUMBER;
-  return n;
 }
 
 function toBit(v) {
@@ -44,59 +39,149 @@ function toNumberOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-function isDuplicateError(err) {
-  const number = Number(
+function normalizeRole(v) {
+  const role = toText(v);
+  if (!role) return null;
+
+  const canonical = ALLOWED_ROLES.find((x) => x.toLowerCase() === role.toLowerCase());
+  return canonical || INVALID_VALUE;
+}
+
+function parseClinicIdsInput(input) {
+  if (input === undefined) {
+    return { provided: false, ids: [], csv: null };
+  }
+
+  if (input === null) {
+    return { provided: true, ids: [], csv: '' };
+  }
+
+  let values = [];
+  if (Array.isArray(input)) {
+    values = input;
+  } else if (typeof input === 'number') {
+    values = [input];
+  } else if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (!trimmed) return { provided: true, ids: [], csv: '' };
+    values = trimmed.split(',');
+  } else {
+    return { provided: true, error: 'idClinicas debe ser arreglo, string CSV, numero o null' };
+  }
+
+  const dedupe = new Set();
+  const ids = [];
+
+  for (const raw of values) {
+    if (raw === null || raw === undefined || String(raw).trim() === '') continue;
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n < 1) {
+      return { provided: true, error: 'idClinicas debe contener enteros positivos' };
+    }
+    if (!dedupe.has(n)) {
+      dedupe.add(n);
+      ids.push(n);
+    }
+  }
+
+  return {
+    provided: true,
+    ids,
+    csv: ids.length ? ids.join(',') : ''
+  };
+}
+
+function getSqlErrorNumber(err) {
+  return Number(
     err?.number ??
       err?.originalError?.info?.number ??
       err?.precedingErrors?.[0]?.number ??
       NaN
   );
+}
+
+function isDuplicateError(err) {
+  const number = getSqlErrorNumber(err);
   const msg = String(err?.message || err || '').toLowerCase();
 
   return (
     number === 2601 ||
     number === 2627 ||
+    number === 50001 ||
+    number === 50003 ||
     msg.includes('duplicate') ||
     msg.includes('duplicado') ||
-    msg.includes('unique')
+    msg.includes('unique') ||
+    msg.includes('ya existe')
   );
 }
 
-function sanitizeUser(row) {
-  const userId = toPositiveInt(row?.UserId ?? row?.userId);
-  const idClinica = toNumberOrNull(row?.IdClinica ?? row?.idClinica);
-
-  const rawIsActive = row?.IsActive ?? row?.isActive;
-  const bit = toBit(rawIsActive);
+function parseAssignedClinic(row) {
+  const clinicId = toPositiveInt(row?.ClinicId ?? row?.AssignedClinicId ?? row?.clinicId);
+  if (!clinicId) return null;
 
   return {
-    userId,
-    username: toText(row?.Username ?? row?.username),
-    fullName: toText(row?.FullName ?? row?.fullName),
-    idClinica,
-    isActive: bit === null ? null : bit === 1
+    clinicId,
+    codigo: toText(row?.Codigo ?? row?.AssignedClinicCodigo ?? row?.codigo),
+    nombre: toText(row?.Nombre ?? row?.AssignedClinicNombre ?? row?.nombre)
   };
 }
 
-async function getUserById(req, userId) {
-  const r = await req.db
-    .request()
-    .input('UserId', req.sql.Int, userId)
-    .query(
-      `
-      SELECT TOP (1)
-        UserId,
-        Username,
-        PasswordHash,
-        FullName,
-        IdClinica,
-        IsActive
-      FROM dbo.Users
-      WHERE UserId = @UserId
-      `
-    );
+function sanitizeUser(row, clinicsRows) {
+  const idClinica = toNumberOrNull(row?.IdClinica ?? row?.idClinica);
+  const assignedClinics = [];
+  const seen = new Set();
 
-  return r.recordset?.[0] || null;
+  for (const cRow of clinicsRows || []) {
+    const clinic = parseAssignedClinic(cRow);
+    if (!clinic) continue;
+    if (seen.has(clinic.clinicId)) continue;
+    seen.add(clinic.clinicId);
+    assignedClinics.push(clinic);
+  }
+
+  let idClinicas = assignedClinics.map((x) => x.clinicId);
+  if (idClinicas.length === 0 && idClinica !== null && toPositiveInt(idClinica)) {
+    idClinicas = [Number(idClinica)];
+  }
+
+  const bit = toBit(row?.IsActive ?? row?.isActive);
+
+  return {
+    userId: toPositiveInt(row?.UserId ?? row?.userId),
+    username: toText(row?.Username ?? row?.username),
+    fullName: toText(row?.FullName ?? row?.fullName),
+    rol: toText(row?.Rol ?? row?.rol),
+    idClinica,
+    idClinicas,
+    clinics: assignedClinics,
+    isActive: bit === null ? null : bit === 1,
+    createdAt: row?.CreatedAt ?? row?.createdAt ?? null
+  };
+}
+
+function mapSpError(res, err) {
+  const number = getSqlErrorNumber(err);
+  const message = String(err?.message || 'Error');
+  const lower = message.toLowerCase();
+
+  if (isDuplicateError(err)) {
+    return res.status(409).json({ message });
+  }
+
+  if (number === 50002 && lower.includes('usuario no existe')) {
+    return res.status(404).json({ message });
+  }
+
+  if (number === 50000 || number === 50002 || number === 50004) {
+    return res.status(400).json({ message });
+  }
+
+  if (number === 245 || number === 8114) {
+    return res.status(400).json({ message: 'Datos invalidos para usuario' });
+  }
+
+  return res.status(500).json({ message: err?.message || 'Error' });
 }
 
 /** GET /api/users?take=100 */
@@ -109,17 +194,65 @@ async function list(req, res) {
       .query(
         `
         SELECT TOP (@Take)
-          UserId,
-          Username,
-          FullName,
-          IdClinica,
-          IsActive
-        FROM dbo.Users
-        ORDER BY UserId DESC
+          u.UserId,
+          u.Username,
+          u.FullName,
+          u.Rol,
+          u.IdClinica,
+          u.IsActive,
+          u.CreatedAt,
+          uc.ClinicId AS AssignedClinicId,
+          c.Codigo AS AssignedClinicCodigo,
+          c.Nombre AS AssignedClinicNombre
+        FROM dbo.Users u
+        LEFT JOIN dbo.UserClinics uc
+          ON uc.UserId = u.UserId
+        LEFT JOIN dbo.Clinics c
+          ON c.ClinicId = uc.ClinicId
+        ORDER BY u.UserId DESC, uc.ClinicId ASC
         `
       );
 
-    return res.json((r.recordset || []).map((x) => sanitizeUser(x)));
+    const map = new Map();
+    for (const row of r.recordset || []) {
+      const userId = toPositiveInt(row.UserId);
+      if (!userId) continue;
+
+      if (!map.has(userId)) {
+        const bit = toBit(row?.IsActive ?? row?.isActive);
+        map.set(userId, {
+          userId,
+          username: toText(row?.Username ?? row?.username),
+          fullName: toText(row?.FullName ?? row?.fullName),
+          rol: toText(row?.Rol ?? row?.rol),
+          idClinica: toNumberOrNull(row?.IdClinica ?? row?.idClinica),
+          idClinicas: [],
+          clinics: [],
+          isActive: bit === null ? null : bit === 1,
+          createdAt: row?.CreatedAt ?? row?.createdAt ?? null
+        });
+      }
+
+      const target = map.get(userId);
+      const clinic = parseAssignedClinic(row);
+      if (!clinic) continue;
+
+      if (!target.idClinicas.includes(clinic.clinicId)) {
+        target.idClinicas.push(clinic.clinicId);
+      }
+      if (!target.clinics.some((x) => x.clinicId === clinic.clinicId)) {
+        target.clinics.push(clinic);
+      }
+    }
+
+    const users = Array.from(map.values()).map((x) => {
+      if (x.idClinicas.length === 0 && x.idClinica !== null && toPositiveInt(x.idClinica)) {
+        x.idClinicas = [Number(x.idClinica)];
+      }
+      return x;
+    });
+
+    return res.json(users);
   } catch (err) {
     return res.status(500).json({ message: err.message || 'Error' });
   }
@@ -134,8 +267,15 @@ Response example (200):
     "userId": 10,
     "username": "admin",
     "fullName": "Administrador",
+    "rol": "Administrador",
     "idClinica": 1,
-    "isActive": true
+    "idClinicas": [1, 2],
+    "clinics": [
+      { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central" },
+      { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" }
+    ],
+    "isActive": true,
+    "createdAt": "2026-02-26T09:00:00.000Z"
   }
 ]
 */
@@ -148,16 +288,26 @@ async function create(req, res) {
     const username = toText(b.username);
     const password = b.password === null || b.password === undefined ? '' : String(b.password);
     const fullName = toText(b.fullName);
-    const idClinica = parseNullablePositiveInt(b.idClinica);
+    const rol = normalizeRole(b.rol);
     const isActive = toBit(hasOwn(b, 'isActive') ? b.isActive : true);
+
+    const clinicsInput = hasOwn(b, 'idClinicas')
+      ? b.idClinicas
+      : hasOwn(b, 'idClinica')
+        ? b.idClinica
+        : undefined;
+    const parsedClinics = parseClinicIdsInput(clinicsInput);
 
     if (!username) return res.status(400).json({ message: 'username requerido' });
     if (!password.trim()) return res.status(400).json({ message: 'password requerido' });
     if (!fullName) return res.status(400).json({ message: 'fullName requerido' });
-    if (idClinica === INVALID_NUMBER) {
-      return res.status(400).json({ message: 'idClinica debe ser entero positivo o null' });
+    if (rol === null || rol === INVALID_VALUE) {
+      return res.status(400).json({
+        message: 'rol invalido. Valores permitidos: SuperAdmin, Administrador, Empleado'
+      });
     }
     if (isActive === null) return res.status(400).json({ message: 'isActive invalido' });
+    if (parsedClinics.error) return res.status(400).json({ message: parsedClinics.error });
 
     const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
 
@@ -165,34 +315,37 @@ async function create(req, res) {
       .request()
       .input('Username', req.sql.NVarChar(60), username)
       .input('PasswordHash', req.sql.NVarChar(255), passwordHash)
-      .input('FullName', req.sql.NVarChar(150), fullName)
-      .input('IdClinica', req.sql.Int, idClinica)
+      .input('FullName', req.sql.NVarChar(120), fullName)
+      .input('Rol', req.sql.NVarChar(20), rol)
+      .input('IdClinicas', req.sql.NVarChar(req.sql.MAX), parsedClinics.csv)
       .input('IsActive', req.sql.Bit, isActive)
       .execute('spUsers_Create');
 
-    const out = r.recordset?.[0];
-    if (out?.ErrorMessage) {
-      if (isDuplicateError(out.ErrorMessage)) {
-        return res.status(409).json({ message: out.ErrorMessage });
+    const userRow = r.recordsets?.[0]?.[0] || r.recordset?.[0] || null;
+    const clinicsRows = r.recordsets?.[1] || [];
+
+    if (userRow?.ErrorMessage) {
+      if (isDuplicateError(userRow.ErrorMessage)) {
+        return res.status(409).json({ message: userRow.ErrorMessage });
       }
-      return res.status(400).json({ message: out.ErrorMessage });
+      return res.status(400).json({ message: userRow.ErrorMessage });
     }
 
-    const row = out || {
-      UserId: null,
-      Username: username,
-      FullName: fullName,
-      IdClinica: idClinica,
-      IsActive: isActive
-    };
-
-    return res.status(201).json(sanitizeUser(row));
+    return res.status(201).json(
+      sanitizeUser(
+        userRow || {
+          UserId: null,
+          Username: username,
+          FullName: fullName,
+          Rol: rol,
+          IdClinica: parsedClinics.ids?.[0] || null,
+          IsActive: isActive
+        },
+        clinicsRows
+      )
+    );
   } catch (err) {
-    if (isDuplicateError(err)) {
-      return res.status(409).json({ message: 'Usuario duplicado' });
-    }
-
-    return res.status(500).json({ message: err.message || 'Error' });
+    return mapSpError(res, err);
   }
 }
 /*
@@ -202,7 +355,8 @@ POST /api/users
   "username": "admin",
   "password": "123456",
   "fullName": "Administrador",
-  "idClinica": 1,
+  "rol": "Administrador",
+  "idClinicas": [1, 2],
   "isActive": true
 }
 
@@ -211,8 +365,15 @@ Response example (201):
   "userId": 10,
   "username": "admin",
   "fullName": "Administrador",
+  "rol": "Administrador",
   "idClinica": 1,
-  "isActive": true
+  "idClinicas": [1, 2],
+  "clinics": [
+    { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central" },
+    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" }
+  ],
+  "isActive": true,
+  "createdAt": "2026-02-26T09:00:00.000Z"
 }
 */
 
@@ -223,10 +384,18 @@ async function update(req, res) {
     if (!userId) return res.status(400).json({ message: 'id invalido' });
 
     const b = req.body || {};
+    const clinicsInput = hasOwn(b, 'idClinicas')
+      ? b.idClinicas
+      : hasOwn(b, 'idClinica')
+        ? b.idClinica
+        : undefined;
+
     const hasUpdatableField =
       hasOwn(b, 'username') ||
       hasOwn(b, 'password') ||
       hasOwn(b, 'fullName') ||
+      hasOwn(b, 'rol') ||
+      hasOwn(b, 'idClinicas') ||
       hasOwn(b, 'idClinica') ||
       hasOwn(b, 'isActive');
 
@@ -234,29 +403,29 @@ async function update(req, res) {
       return res.status(400).json({ message: 'No hay campos para actualizar' });
     }
 
-    const current = await getUserById(req, userId);
-    if (!current) return res.status(404).json({ message: 'No encontrado' });
+    const username = hasOwn(b, 'username') ? toText(b.username) : null;
+    const fullName = hasOwn(b, 'fullName') ? toText(b.fullName) : null;
+    const rol = hasOwn(b, 'rol') ? normalizeRole(b.rol) : null;
+    const isActive = hasOwn(b, 'isActive') ? toBit(b.isActive) : null;
+    const parsedClinics = parseClinicIdsInput(clinicsInput);
 
-    const username = hasOwn(b, 'username') ? toText(b.username) : toText(current.Username);
-    if (!username) return res.status(400).json({ message: 'username invalido' });
-
-    const fullName = hasOwn(b, 'fullName') ? toText(b.fullName) : toText(current.FullName);
-    if (!fullName) return res.status(400).json({ message: 'fullName invalido' });
-
-    const currentIdClinica = parseNullablePositiveInt(current.IdClinica);
-    let idClinica = hasOwn(b, 'idClinica')
-      ? parseNullablePositiveInt(b.idClinica)
-      : currentIdClinica === INVALID_NUMBER
-        ? null
-        : currentIdClinica;
-    if (idClinica === INVALID_NUMBER) {
-      return res.status(400).json({ message: 'idClinica debe ser entero positivo o null' });
+    if (hasOwn(b, 'username') && !username) {
+      return res.status(400).json({ message: 'username invalido' });
     }
+    if (hasOwn(b, 'fullName') && !fullName) {
+      return res.status(400).json({ message: 'fullName invalido' });
+    }
+    if (rol === INVALID_VALUE) {
+      return res.status(400).json({
+        message: 'rol invalido. Valores permitidos: SuperAdmin, Administrador, Empleado'
+      });
+    }
+    if (hasOwn(b, 'isActive') && isActive === null) {
+      return res.status(400).json({ message: 'isActive invalido' });
+    }
+    if (parsedClinics.error) return res.status(400).json({ message: parsedClinics.error });
 
-    const isActive = hasOwn(b, 'isActive') ? toBit(b.isActive) : toBit(current.IsActive);
-    if (isActive === null) return res.status(400).json({ message: 'isActive invalido' });
-
-    let passwordHash = current.PasswordHash;
+    let passwordHash = null;
     if (hasOwn(b, 'password')) {
       const password = b.password === null || b.password === undefined ? '' : String(b.password);
       if (!password.trim()) return res.status(400).json({ message: 'password invalido' });
@@ -268,51 +437,58 @@ async function update(req, res) {
       .input('UserId', req.sql.Int, userId)
       .input('Username', req.sql.NVarChar(60), username)
       .input('PasswordHash', req.sql.NVarChar(255), passwordHash)
-      .input('FullName', req.sql.NVarChar(150), fullName)
-      .input('IdClinica', req.sql.Int, idClinica)
+      .input('FullName', req.sql.NVarChar(120), fullName)
+      .input('Rol', req.sql.NVarChar(20), rol)
+      .input(
+        'IdClinicas',
+        req.sql.NVarChar(req.sql.MAX),
+        parsedClinics.provided ? parsedClinics.csv : null
+      )
       .input('IsActive', req.sql.Bit, isActive)
       .execute('spUsers_Update');
 
-    const out = r.recordset?.[0];
-    if (out?.ErrorMessage) {
-      if (isDuplicateError(out.ErrorMessage)) {
-        return res.status(409).json({ message: out.ErrorMessage });
+    const userRow = r.recordsets?.[0]?.[0] || r.recordset?.[0] || null;
+    const clinicsRows = r.recordsets?.[1] || [];
+
+    if (!userRow) {
+      return res.status(500).json({ message: 'No se obtuvo respuesta del usuario actualizado' });
+    }
+
+    if (userRow?.ErrorMessage) {
+      if (isDuplicateError(userRow.ErrorMessage)) {
+        return res.status(409).json({ message: userRow.ErrorMessage });
       }
-      return res.status(400).json({ message: out.ErrorMessage });
+      return res.status(400).json({ message: userRow.ErrorMessage });
     }
 
-    const row = out || {
-      UserId: userId,
-      Username: username,
-      FullName: fullName,
-      IdClinica: idClinica,
-      IsActive: isActive
-    };
-
-    return res.json(sanitizeUser(row));
+    return res.json(sanitizeUser(userRow, clinicsRows));
   } catch (err) {
-    if (isDuplicateError(err)) {
-      return res.status(409).json({ message: 'Usuario duplicado' });
-    }
-
-    return res.status(500).json({ message: err.message || 'Error' });
+    return mapSpError(res, err);
   }
 }
 /*
 Request example:
 PUT /api/users/10
 {
-  "fullName": "Admin Principal",
-  "idClinica": 2
+  "rol": "Empleado",
+  "idClinicas": [2, 5],
+  "isActive": true
 }
 
 Response example (200):
 {
   "userId": 10,
   "username": "admin",
-  "fullName": "Admin Principal",
+  "fullName": "Administrador",
+  "rol": "Empleado",
   "idClinica": 2,
-  "isActive": true
+  "idClinicas": [2, 5],
+  "clinics": [
+    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" },
+    { "clinicId": 5, "codigo": "CLN-005", "nombre": "Clinica Sur" }
+  ],
+  "isActive": true,
+  "createdAt": "2026-02-26T09:00:00.000Z"
 }
 */
 

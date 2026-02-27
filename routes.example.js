@@ -50,4 +50,5 @@ module.exports = function registerRoutes(app, authMiddleware){
   // Clinicas
   app.post('/api/clinics', authMiddleware, clinics.create);
   app.get('/api/clinics', authMiddleware, clinics.list);
+  app.get('/api/clinics/user/:userId', authMiddleware, clinics.listByUserId);
 };

@@ -153,7 +153,7 @@ app.use((req, res, next) => {
 
   res.setHeader(
     'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-clinic-id'
   );
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
 
@@ -223,6 +223,7 @@ app.post('/api/inventory/:id/decrement', authMiddleware, inventory.decrement);
 
 app.post('/api/clinics', authMiddleware, clinics.create);
 app.get('/api/clinics', authMiddleware, clinics.list);
+app.get('/api/clinics/user/:userId', authMiddleware, clinics.listByUserId);
 
 app.use((req, res) => {
   return res.status(404).json({ message: 'Ruta no encontrada' });
@@ -273,7 +274,7 @@ async function connectDb() {
   } finally {
     dbConnecting = false;
   }
-}
+} 
 
 async function shutdown(signal) {
   console.log(`${signal} recibido. Cerrando servidor...`);

@@ -1,3 +1,5 @@
+const INVALID_NUMBER = Symbol('invalid_number');
+
 function toBit(v){
   if(v === true || v === 1) return 1;
   const s = String(v ?? '').trim().toLowerCase();
@@ -10,6 +12,48 @@ function toNum(v){
   if(v === null || v === undefined || String(v).trim()==='') return null;
   const n = Number(String(v).replace(',','.'));
   return Number.isFinite(n) ? n : null;
+}
+
+function toClinicId(v){
+  if(v === null || v === undefined || String(v).trim()==='') return null;
+  const n = Number(v);
+  if(!Number.isInteger(n) || n < 1) return INVALID_NUMBER;
+  return n;
+}
+
+function toClinicScopeId(v){
+  if(v === null || v === undefined || String(v).trim()==='') return 0;
+  const n = Number(v);
+  if(!Number.isInteger(n) || n < 0) return INVALID_NUMBER;
+  return n;
+}
+
+function resolveClinicScopeId(req){
+  const queryClinicId = req.query?.idClinica ?? req.query?.clinicId;
+  if(queryClinicId !== undefined){
+    return toClinicScopeId(queryClinicId);
+  }
+
+  const headerClinicId = req.headers?.['x-clinic-id'];
+  if(headerClinicId !== undefined){
+    return toClinicScopeId(headerClinicId);
+  }
+
+  const userClinicId = req.user?.idClinica ?? req.user?.clinicId;
+  if(userClinicId !== undefined && userClinicId !== null){
+    return toClinicScopeId(userClinicId);
+  }
+
+  return 0;
+}
+
+function getSqlErrorNumber(err){
+  return Number(
+    err?.number ??
+    err?.originalError?.info?.number ??
+    err?.precedingErrors?.[0]?.number ??
+    NaN
+  );
 }
 
 function toText(v){
@@ -25,6 +69,7 @@ function mapPatientBody(b){
     Address: toText(b.direccion),
     Phone: toText(b.telefono),
     Optometrist: toText(b.opt || b['Opt.']),
+    IdClinica: toClinicId(b.idClinica ?? b.clinicId ?? b.id_clinica),
 
     IsFirstExam: toBit(b.primer_examen),
     UsesRx: toBit(b.usa_rx),
@@ -97,6 +142,9 @@ async function create(req, res){
     if(!p.ExamDate || !p.Name){
       return res.status(400).json({ message: 'fecha y nombre son requeridos' });
     }
+    if(p.IdClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
 
     const r = await req.db.request()
       .input('ExamDate', req.sql.Date, p.ExamDate)
@@ -104,6 +152,7 @@ async function create(req, res){
       .input('Address', req.sql.NVarChar(200), p.Address)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
+      .input('IdClinica', req.sql.Int, p.IdClinica)
 
       .input('IsFirstExam', req.sql.Bit, p.IsFirstExam)
       .input('UsesRx', req.sql.Bit, p.UsesRx)
@@ -173,20 +222,35 @@ async function create(req, res){
     return res.json({
       patientId: row.PatientId,
       orderNo: row.OrderNo,
-      name: row.Name
+      name: row.Name,
+      idClinica: row.IdClinica ?? p.IdClinica ?? null
     });
 
   }catch(err){
+    const number = getSqlErrorNumber(err);
+    if(number === 50020){
+      return res.status(400).json({ message: err.message || 'La clinica enviada no existe.' });
+    }
     return res.status(500).json({ message: err.message || 'Error' });
   }
 }
 
 /** GET /api/patients/search?q=... */
-async function search(req, res){
-  try{
+async function search(req, res) {
+  try {
+
+    console.log('app.get("/api/patients/search", authMiddleware, patients.search);');
+
+
     const q = String(req.query.q || '').trim();
+    const idClinica = resolveClinicScopeId(req);
+    if(idClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+
     const r = await req.db.request()
       .input('Query', req.sql.NVarChar(200), q)
+      .input('IdClinica', req.sql.Int, idClinica)
       .execute('spPatients_Search');
 
     return res.json((r.recordset || []).map(x=>({
@@ -196,7 +260,8 @@ async function search(req, res){
       name: x.Name,
       phone: x.Phone,
       balance: Number(x.Balance ?? 0),
-      deliveredBy: x.DeliveredBy
+      deliveredBy: x.DeliveredBy,
+      idClinica: x.IdClinica ?? null
     })));
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
@@ -206,9 +271,18 @@ async function search(req, res){
 /** GET /api/patients/:id */
 async function getById(req, res){
   try{
+
+    console.log('app.get("/api/patients/:id", authMiddleware, patients.getById);');
+
     const id = Number(req.params.id);
+    const idClinica = resolveClinicScopeId(req);
+    if(idClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+
     const r = await req.db.request()
       .input('PatientId', req.sql.Int, id)
+      .input('IdClinica', req.sql.Int, idClinica)
       .execute('spPatients_GetById');
 
     const x = r.recordset?.[0];
@@ -219,6 +293,7 @@ async function getById(req, res){
       orderNo: x.OrderNo,
       examDate: x.ExamDate,
       name: x.Name,
+      idClinica: x.IdClinica ?? null,
       address: x.Address,
       phone: x.Phone,
       optometrist: x.Optometrist,
@@ -237,6 +312,40 @@ async function getById(req, res){
       hasVisionBorrosa: x.HasVisionBorrosa,
       hasSecreciones: x.HasSecreciones,
 
+      odSphereLensometry: x.OD_Sphere_Lensometry,
+      odCylLensometry: x.OD_Cyl_Lensometry,
+      odAxisLensometry: x.OD_Axis_Lensometry,
+      odAddLensometry: x.OD_Add_Lensometry,
+      oiSphereLensometry: x.OI_Sphere_Lensometry,
+      oiCylLensometry: x.OI_Cyl_Lensometry,
+      oiAxisLensometry: x.OI_Axis_Lensometry,
+      oiAddLensometry: x.OI_Add_Lensometry,
+
+      avOd20: x.AV_OD_20,
+      phOd20: x.PH_OD_20,
+      ccOd20: x.CC_OD_20,
+      avOi20: x.AV_OI_20,
+      phOi20: x.PH_OI_20,
+      ccOi20: x.CC_OI_20,
+
+      autoOdSphere: x.Auto_OD_Sphere,
+      autoOdCyl: x.Auto_OD_Cyl,
+      autoOdAxis: x.Auto_OD_Axis,
+      autoOiSphere: x.Auto_OI_Sphere,
+      autoOiCyl: x.Auto_OI_Cyl,
+      autoOiAxis: x.Auto_OI_Axis,
+
+      rxOdSphere: x.Rx_OD_Sphere,
+      rxOdCyl: x.Rx_OD_Cyl,
+      rxOdAxis: x.Rx_OD_Axis,
+      rxOdAdd: x.Rx_OD_Add,
+      rxOdAlt: x.Rx_OD_Alt,
+      rxOiSphere: x.Rx_OI_Sphere,
+      rxOiCyl: x.Rx_OI_Cyl,
+      rxOiAxis: x.Rx_OI_Axis,
+      rxOiAdd: x.Rx_OI_Add,
+      rxOiAlt: x.Rx_OI_Alt,
+
       frame: x.Frame,
       dip: x.Dip,
       material: x.Material,
@@ -250,7 +359,11 @@ async function getById(req, res){
       comments: x.Comments,
       labCode: x.LabCode,
       deliveredBy: x.DeliveredBy,
-      deliveryDate: x.DeliveryDate
+      deliveryDate: x.DeliveryDate,
+      createdAt: x.CreatedAt,
+      createdByUserId: x.CreatedByUserId ?? null,
+      updatedAt: x.UpdatedAt,
+      updatedByUserId: x.UpdatedByUserId ?? null
     });
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
@@ -259,10 +372,17 @@ async function getById(req, res){
 
 /** GET /api/patients/order/:orderNo */
 async function getByOrder(req, res){
+  console.log('req en getByOrder: ', req);
   try{
     const orderNo = Number(req.params.orderNo);
+    const idClinica = resolveClinicScopeId(req);
+    if(idClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+
     const r = await req.db.request()
       .input('OrderNo', req.sql.Int, orderNo)
+      .input('IdClinica', req.sql.Int, idClinica)
       .execute('spPatients_GetByOrderNo');
 
     const x = r.recordset?.[0];
@@ -273,6 +393,7 @@ async function getByOrder(req, res){
       orderNo: x.OrderNo,
       examDate: x.ExamDate,
       name: x.Name,
+      idClinica: x.IdClinica ?? null,
       phone: x.Phone,
       optometrist: x.Optometrist,
       frame: x.Frame,
