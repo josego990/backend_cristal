@@ -19,6 +19,8 @@ const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '0.0.0.0';
 const dbReconnectDelayMs = Number(process.env.DB_RECONNECT_DELAY_MS || 5000);
 
+const variable = '';
+
 let dbPool;
 let httpServer;
 let dbConnecting = false;
