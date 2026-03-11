@@ -1,7 +1,10 @@
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const fs = require('fs');
 const express = require('express');
+const http = require('http');
+const https = require('https');
 const jwt = require('jsonwebtoken');
 const sql = require('mssql');
 
@@ -15,14 +18,24 @@ const inventory = require('./handlers/inventory.handlers');
 const clinics = require('./handlers/clinics.handlers');
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
 const host = process.env.HOST || '0.0.0.0';
+const httpPort = Number(process.env.PORT || 3000);
+const httpsPort = Number(process.env.HTTPS_PORT || 443);
+const httpRedirectPort = Number(process.env.HTTP_REDIRECT_PORT || 80);
+const useHttps = toBool(process.env.USE_HTTPS, false);
+const redirectHttpToHttps = toBool(process.env.HTTP_TO_HTTPS_REDIRECT, false);
+const sslKeyPath =
+  process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/api.opticlinics.com/privkey.pem';
+const sslCertPath =
+  process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/api.opticlinics.com/fullchain.pem';
+const sslCaPath = process.env.SSL_CA_PATH;
 const dbReconnectDelayMs = Number(process.env.DB_RECONNECT_DELAY_MS || 5000);
 
 const variable = '';
 
 let dbPool;
-let httpServer;
+let apiServer;
+let redirectServer;
 let dbConnecting = false;
 
 function toBool(value, defaultValue) {
@@ -67,6 +80,63 @@ function getMissingRequiredEnv() {
     const value = process.env[name];
     return value === undefined || value === null || String(value).trim() === '';
   });
+}
+
+function getSslOptions() {
+  try {
+    const options = {
+      key: fs.readFileSync(sslKeyPath),
+      cert: fs.readFileSync(sslCertPath)
+    };
+
+    if (sslCaPath && String(sslCaPath).trim() !== '') {
+      options.ca = fs.readFileSync(sslCaPath);
+    }
+
+    return options;
+  } catch (error) {
+    throw new Error(
+      `No se pudieron cargar los certificados SSL. Verifica rutas: key=${sslKeyPath}, cert=${sslCertPath}`
+    );
+  }
+}
+
+async function listenServer(server, listenPort, name) {
+  await new Promise((resolve, reject) => {
+    const onError = (error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+
+    const onListening = () => {
+      server.off('error', onError);
+      resolve();
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(listenPort, host);
+  });
+
+  console.log(`${name} escuchando en ${host}:${listenPort}`);
+}
+
+async function closeServer(server) {
+  if (!server) return;
+
+  await new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) return reject(error);
+      return resolve();
+    });
+  });
+}
+
+function getHttpsRedirectUrl(req) {
+  const hostHeader = String(req.headers.host || '').trim();
+  const hostWithoutPort = hostHeader ? hostHeader.split(':')[0] : process.env.PUBLIC_HOST || 'localhost';
+  const targetPort = httpsPort === 443 ? '' : `:${httpsPort}`;
+  return `https://${hostWithoutPort}${targetPort}${req.url || '/'}`;
 }
 
 function authMiddleware(req, res, next) {
@@ -243,9 +313,28 @@ async function start() {
     throw new Error(`Faltan variables de entorno: ${missingEnv.join(', ')}`);
   }
 
-  httpServer = app.listen(port, host, () => {
-    console.log(`API escuchando en ${host}:${port}`);
-  });
+  if (useHttps) {
+    const sslOptions = getSslOptions();
+    apiServer = https.createServer(sslOptions, app);
+    await listenServer(apiServer, httpsPort, 'API HTTPS');
+
+    if (redirectHttpToHttps) {
+      redirectServer = http.createServer((req, res) => {
+        const redirectUrl = getHttpsRedirectUrl(req);
+        res.writeHead(301, { Location: redirectUrl });
+        res.end();
+      });
+
+      await listenServer(redirectServer, httpRedirectPort, 'Redireccion HTTP -> HTTPS');
+    }
+  } else {
+    apiServer = http.createServer(app);
+    await listenServer(apiServer, httpPort, 'API HTTP');
+
+    if (redirectHttpToHttps) {
+      console.warn('HTTP_TO_HTTPS_REDIRECT se ignora porque USE_HTTPS=false');
+    }
+  }
 
   await connectDb();
 }
@@ -281,14 +370,8 @@ async function connectDb() {
 async function shutdown(signal) {
   console.log(`${signal} recibido. Cerrando servidor...`);
 
-  if (httpServer) {
-    await new Promise((resolve, reject) => {
-      httpServer.close((error) => {
-        if (error) return reject(error);
-        return resolve();
-      });
-    });
-  }
+  await closeServer(redirectServer);
+  await closeServer(apiServer);
 
   if (dbPool) {
     await dbPool.close();
