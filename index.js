@@ -166,9 +166,36 @@ function authMiddleware(req, res, next) {
 }
 
 const allowCredentials = toBool(process.env.CORS_CREDENTIALS, false);
-const allowedOrigins = process.env.CORS_ORIGIN
+const logCorsDecisions = toBool(process.env.CORS_DEBUG, false);
+
+function normalizeOrigin(value) {
+  if (!value) return '';
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (raw === 'null') return 'null';
+  if (raw === '*') return '*';
+  if (raw.toLowerCase() === 'all') return 'all';
+
+  try {
+    const u = new URL(raw);
+    const protocol = String(u.protocol || '').toLowerCase();
+    const host = String(u.hostname || '').toLowerCase();
+    const isDefaultPort =
+      !u.port ||
+      (protocol === 'http:' && u.port === '80') ||
+      (protocol === 'https:' && u.port === '443');
+    const port = isDefaultPort ? '' : `:${u.port}`;
+    return `${protocol}//${host}${port}`;
+  } catch (error) {
+    return raw.replace(/\/+$/, '').toLowerCase();
+  }
+}
+
+const rawAllowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((x) => x.trim()).filter(Boolean)
   : [];
+const allowedOrigins = rawAllowedOrigins.map((origin) => normalizeOrigin(origin)).filter(Boolean);
 const allowAllOrigins =
   allowedOrigins.length === 0 ||
   allowedOrigins.includes('*') ||
@@ -204,18 +231,24 @@ function isLocalDevOrigin(origin) {
   }
 }
 
+
 app.use((req, res, next) => {
-  const origin = String(req.headers.origin || '').trim();
+  const requestOrigin = String(req.headers.origin || '').trim();
+  const normalizedOrigin = normalizeOrigin(requestOrigin);
   const isAllowed =
     allowAllOrigins ||
-    !origin ||
-    origin === 'null' ||
-    allowedOrigins.includes(origin) ||
-    isWildcardAllowed(origin) ||
-    isLocalDevOrigin(origin);
+    !requestOrigin ||
+    normalizedOrigin === 'null' ||
+    allowedOrigins.includes(normalizedOrigin) ||
+    isWildcardAllowed(normalizedOrigin) ||
+    isLocalDevOrigin(normalizedOrigin);
+
+  if (logCorsDecisions && requestOrigin) {
+    console.log(`[CORS] origin=${requestOrigin} normalized=${normalizedOrigin} allowed=${isAllowed}`);
+  }
 
   if (isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Origin', requestOrigin || '*');
     res.setHeader('Vary', 'Origin');
   }
 
