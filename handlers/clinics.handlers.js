@@ -49,6 +49,7 @@ function sanitizeClinic(row) {
     clinicId: Number(row?.ClinicId ?? row?.clinicId ?? 0) || null,
     codigo: toText(row?.Codigo ?? row?.codigo),
     nombre: toText(row?.Nombre ?? row?.nombre),
+    logo: toText(row?.Logo ?? row?.logo),
     estado: toBit(row?.Estado ?? row?.estado) === 1,
     createdAt: row?.CreatedAt ?? row?.createdAt ?? null,
     updatedAt: row?.UpdatedAt ?? row?.updatedAt ?? null
@@ -62,6 +63,7 @@ async function create(req, res) {
 
     const codigo = toText(b.codigo);
     const nombre = toText(b.nombre);
+    const logo = toText(b.logo);
     const estado = hasOwn(b, 'estado') ? toBit(b.estado) : 1;
 
     if (!codigo) return res.status(400).json({ message: 'codigo requerido' });
@@ -72,17 +74,21 @@ async function create(req, res) {
       .request()
       .input('Codigo', req.sql.NVarChar(50), codigo)
       .input('Nombre', req.sql.NVarChar(150), nombre)
+      .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
       .input('Estado', req.sql.Bit, estado)
       .execute('spClinics_Create');
 
-    const row = r.recordset?.[0] || {
+    const row = {
       ClinicId: null,
       Codigo: codigo,
       Nombre: nombre,
+      Logo: logo,
       Estado: estado,
       CreatedAt: null,
       UpdatedAt: null
     };
+
+    Object.assign(row, r.recordset?.[0] || {});
 
     return res.status(201).json(sanitizeClinic(row));
   } catch (err) {
@@ -109,6 +115,7 @@ POST /api/clinics
 {
   "codigo": "CLN-001",
   "nombre": "Clinica Central",
+  "logo": "data:image/png;base64,...",
   "estado": true
 }
 
@@ -117,6 +124,7 @@ Response example (201):
   "clinicId": 1,
   "codigo": "CLN-001",
   "nombre": "Clinica Central",
+  "logo": "data:image/png;base64,...",
   "estado": true,
   "createdAt": "2026-02-23T20:10:00.000Z",
   "updatedAt": null
@@ -136,6 +144,7 @@ async function list(req, res) {
           ClinicId,
           Codigo,
           Nombre,
+          Logo,
           Estado,
           CreatedAt,
           UpdatedAt
@@ -159,6 +168,7 @@ Response example (200):
     "clinicId": 1,
     "codigo": "CLN-001",
     "nombre": "Clinica Central",
+    "logo": "data:image/png;base64,...",
     "estado": true,
     "createdAt": "2026-02-23T20:10:00.000Z",
     "updatedAt": null
@@ -213,6 +223,7 @@ async function listByUserId(req, res) {
           c.ClinicId,
           c.Codigo,
           c.Nombre,
+          c.Logo,
           c.Estado,
           c.CreatedAt,
           c.UpdatedAt
@@ -239,6 +250,7 @@ Response example (200):
     "clinicId": 1,
     "codigo": "CLN-001",
     "nombre": "Clinica Central",
+    "logo": "data:image/png;base64,...",
     "estado": true,
     "createdAt": "2026-02-23T20:10:00.000Z",
     "updatedAt": null

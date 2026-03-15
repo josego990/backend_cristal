@@ -299,6 +299,7 @@ app.use((req, res, next) => {
 
 app.post('/api/auth/login', auth.login);
 app.get('/api/auth/me', authMiddleware, auth.me);
+app.put('/api/auth/change-password', authMiddleware, auth.changePassword);
 
 app.get('/api/dashboard/summary', authMiddleware, dashboard.summary);
 

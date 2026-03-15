@@ -127,6 +127,32 @@ function parseAssignedClinic(row) {
   };
 }
 
+async function getUserRowById(req, userId) {
+  const id = toPositiveInt(userId);
+  if (!id) return null;
+
+  const r = await req.db
+    .request()
+    .input('UserId', req.sql.Int, id)
+    .query(
+      `
+      SELECT TOP (1)
+        UserId,
+        Username,
+        FullName,
+        Rol,
+        IdClinica,
+        IsActive,
+        ChangePassword,
+        CreatedAt
+      FROM dbo.Users
+      WHERE UserId = @UserId
+      `
+    );
+
+  return r.recordset?.[0] || null;
+}
+
 function sanitizeUser(row, clinicsRows) {
   const idClinica = toNumberOrNull(row?.IdClinica ?? row?.idClinica);
   const assignedClinics = [];
@@ -146,6 +172,7 @@ function sanitizeUser(row, clinicsRows) {
   }
 
   const bit = toBit(row?.IsActive ?? row?.isActive);
+  const changePasswordBit = toBit(row?.ChangePassword ?? row?.changePassword);
 
   return {
     userId: toPositiveInt(row?.UserId ?? row?.userId),
@@ -156,6 +183,7 @@ function sanitizeUser(row, clinicsRows) {
     idClinicas,
     clinics: assignedClinics,
     isActive: bit === null ? null : bit === 1,
+    changePassword: changePasswordBit === 1,
     createdAt: row?.CreatedAt ?? row?.createdAt ?? null
   };
 }
@@ -200,6 +228,7 @@ async function list(req, res) {
           u.Rol,
           u.IdClinica,
           u.IsActive,
+          u.ChangePassword,
           u.CreatedAt,
           uc.ClinicId AS AssignedClinicId,
           c.Codigo AS AssignedClinicCodigo,
@@ -220,6 +249,7 @@ async function list(req, res) {
 
       if (!map.has(userId)) {
         const bit = toBit(row?.IsActive ?? row?.isActive);
+        const changePasswordBit = toBit(row?.ChangePassword ?? row?.changePassword);
         map.set(userId, {
           userId,
           username: toText(row?.Username ?? row?.username),
@@ -229,6 +259,7 @@ async function list(req, res) {
           idClinicas: [],
           clinics: [],
           isActive: bit === null ? null : bit === 1,
+          changePassword: changePasswordBit === 1,
           createdAt: row?.CreatedAt ?? row?.createdAt ?? null
         });
       }
@@ -323,6 +354,11 @@ async function create(req, res) {
 
     const userRow = r.recordsets?.[0]?.[0] || r.recordset?.[0] || null;
     const clinicsRows = r.recordsets?.[1] || [];
+    const createdUserId = toPositiveInt(userRow?.UserId ?? userRow?.userId);
+    const hydratedUserRow =
+      createdUserId && userRow?.ChangePassword === undefined && userRow?.changePassword === undefined
+        ? (await getUserRowById(req, createdUserId)) || userRow
+        : userRow;
 
     if (userRow?.ErrorMessage) {
       if (isDuplicateError(userRow.ErrorMessage)) {
@@ -333,7 +369,7 @@ async function create(req, res) {
 
     return res.status(201).json(
       sanitizeUser(
-        userRow || {
+        hydratedUserRow || {
           UserId: null,
           Username: username,
           FullName: fullName,
@@ -397,7 +433,8 @@ async function update(req, res) {
       hasOwn(b, 'rol') ||
       hasOwn(b, 'idClinicas') ||
       hasOwn(b, 'idClinica') ||
-      hasOwn(b, 'isActive');
+      hasOwn(b, 'isActive') ||
+      hasOwn(b, 'changePassword');
 
     if (!hasUpdatableField) {
       return res.status(400).json({ message: 'No hay campos para actualizar' });
@@ -407,6 +444,7 @@ async function update(req, res) {
     const fullName = hasOwn(b, 'fullName') ? toText(b.fullName) : null;
     const rol = hasOwn(b, 'rol') ? normalizeRole(b.rol) : null;
     const isActive = hasOwn(b, 'isActive') ? toBit(b.isActive) : null;
+    const changePassword = hasOwn(b, 'changePassword') ? toBit(b.changePassword) : null;
     const parsedClinics = parseClinicIdsInput(clinicsInput);
 
     if (hasOwn(b, 'username') && !username) {
@@ -422,6 +460,9 @@ async function update(req, res) {
     }
     if (hasOwn(b, 'isActive') && isActive === null) {
       return res.status(400).json({ message: 'isActive invalido' });
+    }
+    if (hasOwn(b, 'changePassword') && changePassword === null) {
+      return res.status(400).json({ message: 'changePassword invalido' });
     }
     if (parsedClinics.error) return res.status(400).json({ message: parsedClinics.error });
 
@@ -445,10 +486,15 @@ async function update(req, res) {
         parsedClinics.provided ? parsedClinics.csv : null
       )
       .input('IsActive', req.sql.Bit, isActive)
+      .input('ChangePassword', req.sql.Bit, changePassword)
       .execute('spUsers_Update');
 
     const userRow = r.recordsets?.[0]?.[0] || r.recordset?.[0] || null;
     const clinicsRows = r.recordsets?.[1] || [];
+    const hydratedUserRow =
+      userId && userRow?.ChangePassword === undefined && userRow?.changePassword === undefined
+        ? (await getUserRowById(req, userId)) || userRow
+        : userRow;
 
     if (!userRow) {
       return res.status(500).json({ message: 'No se obtuvo respuesta del usuario actualizado' });
@@ -461,7 +507,7 @@ async function update(req, res) {
       return res.status(400).json({ message: userRow.ErrorMessage });
     }
 
-    return res.json(sanitizeUser(userRow, clinicsRows));
+    return res.json(sanitizeUser(hydratedUserRow, clinicsRows));
   } catch (err) {
     return mapSpError(res, err);
   }

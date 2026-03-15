@@ -370,12 +370,16 @@ async function getById(req, res){
   }
 }
 
-/** GET /api/patients/order/:orderNo */
+/** GET /api/patients/order/:orderNo */ //se agrega validación por usuario
 async function getByOrder(req, res){
-  console.log('req en getByOrder: ', req);
+  //console.log('req en getByOrder: ', req);
   try{
     const orderNo = Number(req.params.orderNo);
+    
     const idClinica = resolveClinicScopeId(req);
+
+    console.log('idClinica:: ', idClinica);
+
     if(idClinica === INVALID_NUMBER){
       return res.status(400).json({ message: 'idClinica invalido' });
     }
@@ -394,6 +398,7 @@ async function getByOrder(req, res){
       examDate: x.ExamDate,
       name: x.Name,
       idClinica: x.IdClinica ?? null,
+      nombreClinica: x.NombreClinica ?? x.ClinicName ?? null,
       phone: x.Phone,
       optometrist: x.Optometrist,
       frame: x.Frame,
@@ -430,22 +435,33 @@ async function getByOrder(req, res){
   }
 }
 
+// Shared implementation for both lab-code routes.
+async function setLabCode(req, res){
+  const id = Number(req.params.id);
+  const labCode = toText(req.body?.labCode);
+
+  if(!Number.isInteger(id) || id < 1){
+    return res.status(400).json({ message: 'PatientId invalido' });
+  }
+  if(!labCode){
+    return res.status(400).json({ message: 'labCode requerido' });
+  }
+
+  const r = await req.db.request()
+    .input('PatientId', req.sql.Int, id)
+    .input('LabCode', req.sql.NVarChar(50), labCode)
+    .execute('spPatients_UpdateLabCode');
+
+  const out = r.recordset?.[0];
+  if(out?.ErrorMessage) return res.status(409).json({ message: out.ErrorMessage });
+
+  return res.json({ ok:true, labCode });
+}
+
 /** PUT /api/patients/:id/lab-code */
 async function updateLabCode(req, res){
   try{
-    const id = Number(req.params.id);
-    const labCode = String(req.body?.labCode || '').trim();
-    if(!labCode) return res.status(400).json({ message: 'labCode requerido' });
-
-    const r = await req.db.request()
-      .input('PatientId', req.sql.Int, id)
-      .input('LabCode', req.sql.NVarChar(50), labCode)
-      .execute('spPatients_UpdateLabCode');
-
-    const out = r.recordset?.[0];
-    if(out?.ErrorMessage) return res.status(409).json({ message: out.ErrorMessage });
-
-    return res.json({ ok:true });
+    return await setLabCode(req, res);
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
   }
@@ -454,15 +470,7 @@ async function updateLabCode(req, res){
 /** PUT /api/patients/:id/assign-lab-code */
 async function assignLabCode(req, res){
   try{
-    const id = Number(req.params.id);
-    const r = await req.db.request()
-      .input('PatientId', req.sql.Int, id)
-      .execute('spPatients_AssignLabCode');
-
-    const out = r.recordset?.[0];
-    if(out?.ErrorMessage) return res.status(409).json({ message: out.ErrorMessage });
-
-    return res.json({ labCode: out.AssignedLabCode });
+    return await setLabCode(req, res);
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
   }
