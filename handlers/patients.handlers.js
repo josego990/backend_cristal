@@ -1,4 +1,5 @@
 const INVALID_NUMBER = Symbol('invalid_number');
+const INVALID_JSON = Symbol('invalid_json');
 
 function toBit(v){
   if(v === true || v === 1) return 1;
@@ -60,6 +61,42 @@ function toText(v){
   const s = (v === null || v === undefined) ? '' : String(v);
   const t = s.trim();
   return t.length ? t : null;
+}
+
+function toJsonText(v){
+  if(v === null || v === undefined) return null;
+
+  if(typeof v === 'string'){
+    const text = v.trim();
+    if(!text) return null;
+
+    try{
+      return JSON.stringify(JSON.parse(text));
+    }catch{
+      return INVALID_JSON;
+    }
+  }
+
+  try{
+    const json = JSON.stringify(v);
+    return json === undefined ? INVALID_JSON : json;
+  }catch{
+    return INVALID_JSON;
+  }
+}
+
+function fromJsonText(v, fallback = []){
+  if(v === null || v === undefined) return fallback;
+  if(typeof v !== 'string') return v;
+
+  const text = v.trim();
+  if(!text) return fallback;
+
+  try{
+    return JSON.parse(text);
+  }catch{
+    return fallback;
+  }
 }
 
 function mapPatientBody(b){
@@ -126,6 +163,7 @@ function mapPatientBody(b){
     Material: toText(b.material),
     Lens: toText(b.lente),
     Treatment: toText(b.tratamiento),
+    ProductsJson: toJsonText(b.productos ?? b.products ?? b.Products),
 
     Total: toNum(b.costo_total),
     Deposit: toNum(b.anticipo),
@@ -144,6 +182,9 @@ async function create(req, res){
     }
     if(p.IdClinica === INVALID_NUMBER){
       return res.status(400).json({ message: 'idClinica invalido' });
+    }
+    if(p.ProductsJson === INVALID_JSON){
+      return res.status(400).json({ message: 'products debe ser un json valido' });
     }
 
     const r = await req.db.request()
@@ -208,6 +249,7 @@ async function create(req, res){
       .input('Material', req.sql.NVarChar(80), p.Material)
       .input('Lens', req.sql.NVarChar(120), p.Lens)
       .input('Treatment', req.sql.NVarChar(120), p.Treatment)
+      .input('Products', req.sql.NVarChar(req.sql.MAX), p.ProductsJson)
 
       .input('Total', req.sql.Decimal(10,2), p.Total)
       .input('Deposit', req.sql.Decimal(10,2), p.Deposit)
@@ -223,12 +265,22 @@ async function create(req, res){
       patientId: row.PatientId,
       orderNo: row.OrderNo,
       name: row.Name,
-      idClinica: row.IdClinica ?? p.IdClinica ?? null
+      idClinica: row.IdClinica ?? p.IdClinica ?? null,
+      products: fromJsonText(row.Products ?? p.ProductsJson, [])
     });
 
   }catch(err){
     const number = getSqlErrorNumber(err);
-    if(number === 50020){
+    if([
+      50020,
+      50021,
+      50022,
+      50023,
+      50024,
+      50025,
+      50026,
+      50027
+    ].includes(number)){
       return res.status(400).json({ message: err.message || 'La clinica enviada no existe.' });
     }
     return res.status(500).json({ message: err.message || 'Error' });
@@ -351,6 +403,7 @@ async function getById(req, res){
       material: x.Material,
       lens: x.Lens,
       treatment: x.Treatment,
+      products: fromJsonText(x.Products, []),
 
       total: Number(x.Total ?? 0),
       deposit: Number(x.Deposit ?? 0),
@@ -406,6 +459,7 @@ async function getByOrder(req, res){
       material: x.Material,
       lens: x.Lens,
       treatment: x.Treatment,
+      products: fromJsonText(x.Products, []),
       total: Number(x.Total ?? 0),
       deposit: Number(x.Deposit ?? 0),
       balance: Number(x.Balance ?? 0),

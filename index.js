@@ -16,6 +16,7 @@ const expenses = require('./handlers/expenses.handlers');
 const users = require('./handlers/users.handlers');
 const inventory = require('./handlers/inventory.handlers');
 const clinics = require('./handlers/clinics.handlers');
+const reports = require('./handlers/reports.handlers');
 
 const app = express();
 const host = process.env.HOST || '0.0.0.0';
@@ -302,6 +303,14 @@ app.get('/api/auth/me', authMiddleware, auth.me);
 app.put('/api/auth/change-password', authMiddleware, auth.changePassword);
 
 app.get('/api/dashboard/summary', authMiddleware, dashboard.summary);
+
+app.get('/api/reports/patients/revenue-by-day', authMiddleware, reports.patientsRevenueByDay);
+app.get('/api/reports/patients/pending-deliveries', authMiddleware, reports.patientsPendingDeliveries);
+app.get('/api/reports/patients/receivables', authMiddleware, reports.patientsReceivables);
+app.get('/api/reports/quotations/by-day', authMiddleware, reports.quotationsByDay);
+app.get('/api/reports/inventory/valuation', authMiddleware, reports.inventoryValuation);
+app.get('/api/reports/inventory/low-stock', authMiddleware, reports.inventoryLowStock);
+app.get('/api/reports/expenses/by-day', authMiddleware, reports.expensesByDay);
 
 app.post('/api/patients', authMiddleware, patients.create);
 app.get('/api/patients/search', authMiddleware, patients.search);

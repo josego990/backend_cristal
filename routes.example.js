@@ -9,6 +9,7 @@ const expenses = require('./handlers/expenses.handlers');
 const users = require('./handlers/users.handlers');
 const inventory = require('./handlers/inventory.handlers');
 const clinics = require('./handlers/clinics.handlers');
+const reports = require('./handlers/reports.handlers');
 
 module.exports = function registerRoutes(app, authMiddleware){
   // Auth
@@ -17,6 +18,15 @@ module.exports = function registerRoutes(app, authMiddleware){
 
   // Dashboard
   app.get('/api/dashboard/summary', authMiddleware, dashboard.summary);
+
+  // Reportes
+  app.get('/api/reports/patients/revenue-by-day', authMiddleware, reports.patientsRevenueByDay);
+  app.get('/api/reports/patients/pending-deliveries', authMiddleware, reports.patientsPendingDeliveries);
+  app.get('/api/reports/patients/receivables', authMiddleware, reports.patientsReceivables);
+  app.get('/api/reports/quotations/by-day', authMiddleware, reports.quotationsByDay);
+  app.get('/api/reports/inventory/valuation', authMiddleware, reports.inventoryValuation);
+  app.get('/api/reports/inventory/low-stock', authMiddleware, reports.inventoryLowStock);
+  app.get('/api/reports/expenses/by-day', authMiddleware, reports.expensesByDay);
 
   // Pacientes
   app.post('/api/patients', authMiddleware, patients.create);
@@ -52,3 +62,15 @@ module.exports = function registerRoutes(app, authMiddleware){
   app.get('/api/clinics', authMiddleware, clinics.list);
   app.get('/api/clinics/user/:userId', authMiddleware, clinics.listByUserId);
 };
+
+/*
+curl examples:
+
+curl -X GET "http://localhost:3000/api/reports/patients/revenue-by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=0" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/patients/pending-deliveries?take=50&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/patients/receivables?take=100&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/quotations/by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/inventory/valuation?idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/inventory/low-stock?threshold=3&take=200&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/expenses/by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+*/
