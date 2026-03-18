@@ -33,6 +33,7 @@ module.exports = function registerRoutes(app, authMiddleware){
   app.get('/api/patients/search', authMiddleware, patients.search);
   app.get('/api/patients/order/:orderNo', authMiddleware, patients.getByOrder);
   app.get('/api/patients/:id', authMiddleware, patients.getById);
+  app.put('/api/patients/:id', authMiddleware, patients.update);
   app.put('/api/patients/:id/lab-code', authMiddleware, patients.updateLabCode);
   app.put('/api/patients/:id/assign-lab-code', authMiddleware, patients.assignLabCode);
   app.put('/api/patients/:id/deliver', authMiddleware, patients.confirmDelivery);
@@ -41,6 +42,7 @@ module.exports = function registerRoutes(app, authMiddleware){
   app.post('/api/quotations', authMiddleware, quotations.create);
   app.get('/api/quotations', authMiddleware, quotations.list);
   app.get('/api/quotations/:id', authMiddleware, quotations.getById);
+  app.delete('/api/quotations/:id', authMiddleware, quotations.remove);
 
   // Gastos
   app.post('/api/expenses', authMiddleware, expenses.create);
@@ -60,6 +62,7 @@ module.exports = function registerRoutes(app, authMiddleware){
   // Clinicas
   app.post('/api/clinics', authMiddleware, clinics.create);
   app.get('/api/clinics', authMiddleware, clinics.list);
+  app.put('/api/clinics/:id', authMiddleware, clinics.update);
   app.get('/api/clinics/user/:userId', authMiddleware, clinics.listByUserId);
 };
 

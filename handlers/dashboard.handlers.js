@@ -81,6 +81,7 @@ async function summary(req, res){
   try{
     const rol = normalizeRoleForSp(req.user?.rol ?? req.user?.role);
     const userId = Number(req.user?.userId);
+    console.log('BODY:: ', req.user);
     const idClinicScope = resolveClinicScopeId(req);
 
     if(idClinicScope === INVALID_NUMBER){

@@ -167,4 +167,39 @@ async function getById(req, res){
   }
 }
 
-module.exports = { create, list, getById };
+/** DELETE /api/quotations/:id */
+async function remove(req, res){
+  try{
+    const id = Number(req.params.id);
+    if(!Number.isInteger(id) || id < 1){
+      return res.status(400).json({ message: 'id invalido' });
+    }
+
+    const idClinica = resolveClinicScopeId(req);
+    if(idClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+
+    const existing = await req.db.request()
+      .input('QuotationId', req.sql.Int, id)
+      .input('IdClinica', req.sql.Int, idClinica)
+      .execute('spQuotations_GetById');
+
+    if(!existing.recordset?.[0]){
+      return res.status(404).json({ message: 'No encontrado' });
+    }
+
+    await req.db.request()
+      .input('idQuotation', req.sql.Int, id)
+      .execute('spQuitation_Delete');
+
+    return res.json({
+      ok: true,
+      quotationId: id
+    });
+  }catch(err){
+    return res.status(500).json({ message: err.message || 'Error' });
+  }
+}
+
+module.exports = { create, list, getById, remove };

@@ -35,6 +35,7 @@ function isDuplicateError(err) {
 
   return (
     number === 50100 ||
+    number === 50102 ||
     number === 2601 ||
     number === 2627 ||
     msg.includes('ya existe') ||
@@ -54,6 +55,15 @@ function sanitizeClinic(row) {
     createdAt: row?.CreatedAt ?? row?.createdAt ?? null,
     updatedAt: row?.UpdatedAt ?? row?.updatedAt ?? null
   };
+}
+
+function getSqlErrorNumber(err) {
+  return Number(
+    err?.number ??
+      err?.originalError?.info?.number ??
+      err?.precedingErrors?.[0]?.number ??
+      NaN
+  );
 }
 
 /** POST /api/clinics */
@@ -176,6 +186,110 @@ Response example (200):
 ]
 */
 
+/** PUT /api/clinics/:id */
+async function update(req, res) {
+  try {
+    const clinicId = toPositiveInt(req.params.id);
+    if (!clinicId) return res.status(400).json({ message: 'id invalido' });
+
+    const b = req.body || {};
+    const hasCodigo = hasOwn(b, 'codigo');
+    const hasNombre = hasOwn(b, 'nombre');
+    const hasLogo = hasOwn(b, 'logo');
+    const hasEstado = hasOwn(b, 'estado');
+
+    if (!hasCodigo && !hasNombre && !hasLogo && !hasEstado) {
+      return res.status(400).json({ message: 'No hay campos para actualizar' });
+    }
+
+    const currentResult = await req.db
+      .request()
+      .input('ClinicId', req.sql.Int, clinicId)
+      .query(
+        `
+        SELECT TOP (1)
+          ClinicId,
+          Codigo,
+          Nombre,
+          Logo,
+          Estado,
+          CreatedAt,
+          UpdatedAt
+        FROM dbo.Clinics
+        WHERE ClinicId = @ClinicId
+        `
+      );
+
+    const current = currentResult.recordset?.[0];
+    if (!current) return res.status(404).json({ message: 'No encontrado' });
+
+    const codigo = hasCodigo ? toText(b.codigo) : toText(current.Codigo);
+    const nombre = hasNombre ? toText(b.nombre) : toText(current.Nombre);
+    const logo = hasLogo ? toText(b.logo) : toText(current.Logo);
+    const estado = hasEstado ? toBit(b.estado) : toBit(current.Estado);
+
+    if (!codigo) return res.status(400).json({ message: 'codigo requerido' });
+    if (!nombre) return res.status(400).json({ message: 'nombre requerido' });
+    if (estado === null) return res.status(400).json({ message: 'estado invalido' });
+
+    const r = await req.db
+      .request()
+      .input('ClinicId', req.sql.Int, clinicId)
+      .input('Codigo', req.sql.NVarChar(50), codigo)
+      .input('Nombre', req.sql.NVarChar(150), nombre)
+      .input('Estado', req.sql.Bit, estado)
+      .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
+      .execute('spClinics_Update');
+
+    const row = {
+      ClinicId: clinicId,
+      Codigo: codigo,
+      Nombre: nombre,
+      Logo: logo,
+      Estado: estado,
+      CreatedAt: current.CreatedAt,
+      UpdatedAt: current.UpdatedAt
+    };
+
+    Object.assign(row, r.recordset?.[0] || {});
+
+    return res.json(sanitizeClinic(row));
+  } catch (err) {
+    const number = getSqlErrorNumber(err);
+
+    if (number === 50101) {
+      return res.status(404).json({ message: err.message || 'La clinica no existe.' });
+    }
+    if (isDuplicateError(err)) {
+      return res.status(409).json({ message: err.message || 'Codigo de clinica duplicado' });
+    }
+    if (Number.isFinite(number) && number >= 50000 && number < 60000) {
+      return res.status(400).json({ message: err.message || 'Error de validacion' });
+    }
+
+    return res.status(500).json({ message: err.message || 'Error' });
+  }
+}
+/*
+Request example:
+PUT /api/clinics/1
+{
+  "nombre": "Clinica Central Actualizada",
+  "estado": false
+}
+
+Response example (200):
+{
+  "clinicId": 1,
+  "codigo": "CLN-001",
+  "nombre": "Clinica Central Actualizada",
+  "logo": "data:image/png;base64,...",
+  "estado": false,
+  "createdAt": "2026-02-23T20:10:00.000Z",
+  "updatedAt": "2026-03-18T20:10:00.000Z"
+}
+*/
+
 /** GET /api/clinics/user/:userId */
 async function listByUserId(req, res) {
   try {
@@ -258,4 +372,4 @@ Response example (200):
 ]
 */
 
-module.exports = { create, list, listByUserId };
+module.exports = { create, list, update, listByUserId };

@@ -48,6 +48,15 @@ function resolveClinicScopeId(req){
   return 0;
 }
 
+function normalizeRole(value){
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function canEditExistingPatient(user){
+  const role = normalizeRole(user?.rol ?? user?.role);
+  return role === 'superadmin' || role === 'administrador';
+}
+
 function getSqlErrorNumber(err){
   return Number(
     err?.number ??
@@ -287,6 +296,135 @@ async function create(req, res){
   }
 }
 
+/** PUT /api/patients/:id */
+async function update(req, res){
+  try{
+    if(!canEditExistingPatient(req.user)){
+      return res.status(403).json({ message: 'Solo SuperAdmin y Administrador pueden editar ordenes.' });
+    }
+
+    const id = Number(req.params.id);
+    if(!Number.isInteger(id) || id < 1){
+      return res.status(400).json({ message: 'id invalido' });
+    }
+
+    const idClinica = resolveClinicScopeId(req);
+    if(idClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+
+    const existing = await req.db.request()
+      .input('PatientId', req.sql.Int, id)
+      .input('IdClinica', req.sql.Int, idClinica)
+      .execute('spPatients_GetById');
+
+    if(!existing.recordset?.[0]){
+      return res.status(404).json({ message: 'No encontrado' });
+    }
+
+    const p = mapPatientBody(req.body || {});
+    if(!p.ExamDate || !p.Name){
+      return res.status(400).json({ message: 'fecha y nombre son requeridos' });
+    }
+    if(p.IdClinica === INVALID_NUMBER){
+      return res.status(400).json({ message: 'idClinica invalido' });
+    }
+    if(p.ProductsJson === INVALID_JSON){
+      return res.status(400).json({ message: 'products debe ser un json valido' });
+    }
+
+    const r = await req.db.request()
+      .input('PatientId', req.sql.Int, id)
+      .input('ExamDate', req.sql.Date, p.ExamDate)
+      .input('Name', req.sql.NVarChar(150), p.Name)
+      .input('Address', req.sql.NVarChar(200), p.Address)
+      .input('Phone', req.sql.NVarChar(30), p.Phone)
+      .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
+      .input('IdClinica', req.sql.Int, p.IdClinica)
+
+      .input('IsFirstExam', req.sql.Bit, p.IsFirstExam)
+      .input('UsesRx', req.sql.Bit, p.UsesRx)
+      .input('HasDiabetes', req.sql.Bit, p.HasDiabetes)
+      .input('HasBlindness', req.sql.Bit, p.HasBlindness)
+      .input('HasHypertension', req.sql.Bit, p.HasHypertension)
+
+      .input('HasCefalea', req.sql.Bit, p.HasCefalea)
+      .input('HasArdorOcular', req.sql.Bit, p.HasArdorOcular)
+      .input('HasDolorOcular', req.sql.Bit, p.HasDolorOcular)
+      .input('HasPrurito', req.sql.Bit, p.HasPrurito)
+      .input('HasFotofobia', req.sql.Bit, p.HasFotofobia)
+      .input('HasBlindness2', req.sql.Bit, p.HasBlindness2)
+      .input('HasVisionBorrosa', req.sql.Bit, p.HasVisionBorrosa)
+      .input('HasSecreciones', req.sql.Bit, p.HasSecreciones)
+
+      .input('OD_Sphere_Lensometry', req.sql.NVarChar(20), p.OD_Sphere_Lensometry)
+      .input('OD_Cyl_Lensometry', req.sql.NVarChar(20), p.OD_Cyl_Lensometry)
+      .input('OD_Axis_Lensometry', req.sql.NVarChar(20), p.OD_Axis_Lensometry)
+      .input('OD_Add_Lensometry', req.sql.NVarChar(20), p.OD_Add_Lensometry)
+      .input('OI_Sphere_Lensometry', req.sql.NVarChar(20), p.OI_Sphere_Lensometry)
+      .input('OI_Cyl_Lensometry', req.sql.NVarChar(20), p.OI_Cyl_Lensometry)
+      .input('OI_Axis_Lensometry', req.sql.NVarChar(20), p.OI_Axis_Lensometry)
+      .input('OI_Add_Lensometry', req.sql.NVarChar(20), p.OI_Add_Lensometry)
+
+      .input('AV_OD_20', req.sql.NVarChar(20), p.AV_OD_20)
+      .input('PH_OD_20', req.sql.NVarChar(20), p.PH_OD_20)
+      .input('CC_OD_20', req.sql.NVarChar(20), p.CC_OD_20)
+      .input('AV_OI_20', req.sql.NVarChar(20), p.AV_OI_20)
+      .input('PH_OI_20', req.sql.NVarChar(20), p.PH_OI_20)
+      .input('CC_OI_20', req.sql.NVarChar(20), p.CC_OI_20)
+
+      .input('Auto_OD_Sphere', req.sql.NVarChar(20), p.Auto_OD_Sphere)
+      .input('Auto_OD_Cyl', req.sql.NVarChar(20), p.Auto_OD_Cyl)
+      .input('Auto_OD_Axis', req.sql.NVarChar(20), p.Auto_OD_Axis)
+      .input('Auto_OI_Sphere', req.sql.NVarChar(20), p.Auto_OI_Sphere)
+      .input('Auto_OI_Cyl', req.sql.NVarChar(20), p.Auto_OI_Cyl)
+      .input('Auto_OI_Axis', req.sql.NVarChar(20), p.Auto_OI_Axis)
+
+      .input('Rx_OD_Sphere', req.sql.NVarChar(20), p.Rx_OD_Sphere)
+      .input('Rx_OD_Cyl', req.sql.NVarChar(20), p.Rx_OD_Cyl)
+      .input('Rx_OD_Axis', req.sql.NVarChar(20), p.Rx_OD_Axis)
+      .input('Rx_OD_Add', req.sql.NVarChar(20), p.Rx_OD_Add)
+      .input('Rx_OD_Alt', req.sql.NVarChar(20), p.Rx_OD_Alt)
+      .input('Rx_OI_Sphere', req.sql.NVarChar(20), p.Rx_OI_Sphere)
+      .input('Rx_OI_Cyl', req.sql.NVarChar(20), p.Rx_OI_Cyl)
+      .input('Rx_OI_Axis', req.sql.NVarChar(20), p.Rx_OI_Axis)
+      .input('Rx_OI_Add', req.sql.NVarChar(20), p.Rx_OI_Add)
+      .input('Rx_OI_Alt', req.sql.NVarChar(20), p.Rx_OI_Alt)
+
+      .input('Frame', req.sql.NVarChar(80), p.Frame)
+      .input('Dip', req.sql.NVarChar(30), p.Dip)
+      .input('Material', req.sql.NVarChar(80), p.Material)
+      .input('Lens', req.sql.NVarChar(120), p.Lens)
+      .input('Treatment', req.sql.NVarChar(120), p.Treatment)
+      .input('Products', req.sql.NVarChar(req.sql.MAX), p.ProductsJson)
+
+      .input('Total', req.sql.Decimal(10,2), p.Total)
+      .input('Deposit', req.sql.Decimal(10,2), p.Deposit)
+      .input('Balance', req.sql.Decimal(10,2), p.Balance)
+      .input('PaymentMethod', req.sql.NVarChar(30), p.PaymentMethod)
+      .input('Comments', req.sql.NVarChar(500), p.Comments)
+
+      .input('UpdatedByUserId', req.sql.Int, req.user?.userId || null)
+      .execute('spPatients_Update');
+
+    const row = r.recordset?.[0];
+    return res.json({
+      patientId: row.PatientId,
+      orderNo: row.OrderNo,
+      name: row.Name,
+      idClinica: row.IdClinica ?? p.IdClinica ?? null,
+      products: fromJsonText(row.Products ?? p.ProductsJson, [])
+    });
+
+  }catch(err){
+    const number = getSqlErrorNumber(err);
+    if([50020,50021,50022,50023,50024,50025,50026,50027,50028].includes(number)){
+      return res.status(400).json({ message: err.message || 'No se pudo actualizar la orden.' });
+    }
+    return res.status(500).json({ message: err.message || 'Error' });
+  }
+}
+
 /** GET /api/patients/search?q=... */
 async function search(req, res) {
   try {
@@ -340,12 +478,15 @@ async function getById(req, res){
     const x = r.recordset?.[0];
     if(!x) return res.status(404).json({ message: 'No encontrado' });
 
+    console.log('LOL TE JODES:: ', x);
+
     return res.json({
       patientId: x.PatientId,
       orderNo: x.OrderNo,
       examDate: x.ExamDate,
       name: x.Name,
       idClinica: x.IdClinica ?? null,
+      nombreUsuario: x.FullName,
       address: x.Address,
       phone: x.Phone,
       optometrist: x.Optometrist,
@@ -445,6 +586,8 @@ async function getByOrder(req, res){
     const x = r.recordset?.[0];
     if(!x) return res.status(404).json({ message: 'No encontrado' });
 
+    console.log('ORDEN:: ', x);
+
     return res.json({
       patientId: x.PatientId,
       orderNo: x.OrderNo,
@@ -452,6 +595,7 @@ async function getByOrder(req, res){
       name: x.Name,
       idClinica: x.IdClinica ?? null,
       nombreClinica: x.NombreClinica ?? x.ClinicName ?? null,
+      nombreUsuario: x.NombreUsuario,
       phone: x.Phone,
       optometrist: x.Optometrist,
       frame: x.Frame,
@@ -469,7 +613,7 @@ async function getByOrder(req, res){
       deliveredBy: x.DeliveredBy,
       deliveryDate: x.DeliveryDate,
 
-      // para detalle (si lo necesitas en UI)
+
       isFirstExam: x.IsFirstExam,
       usesRx: x.UsesRx,
       hasDiabetes: x.HasDiabetes,
@@ -554,6 +698,7 @@ async function confirmDelivery(req, res){
 
 module.exports = {
   create,
+  update,
   search,
   getById,
   getByOrder,
