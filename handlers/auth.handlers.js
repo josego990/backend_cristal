@@ -72,7 +72,7 @@ function buildJwtPayload(user) {
 }
 
 function signToken(user) {
-  return jwt.sign(buildJwtPayload(user), getJwtSecret(), { expiresIn: '10m' });
+  return jwt.sign(buildJwtPayload(user), getJwtSecret(), { expiresIn: '60m' });
 }
 
 function getSqlErrorNumber(err) {

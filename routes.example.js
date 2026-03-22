@@ -21,6 +21,7 @@ module.exports = function registerRoutes(app, authMiddleware){
 
   // Reportes
   app.get('/api/reports/patients/revenue-by-day', authMiddleware, reports.patientsRevenueByDay);
+  app.get('/api/reports/patients/orders-list', authMiddleware, reports.patientsOrdersList);
   app.get('/api/reports/patients/pending-deliveries', authMiddleware, reports.patientsPendingDeliveries);
   app.get('/api/reports/patients/receivables', authMiddleware, reports.patientsReceivables);
   app.get('/api/reports/quotations/by-day', authMiddleware, reports.quotationsByDay);
@@ -70,6 +71,7 @@ module.exports = function registerRoutes(app, authMiddleware){
 curl examples:
 
 curl -X GET "http://localhost:3000/api/reports/patients/revenue-by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=0" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/patients/orders-list?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2&query=Juan" -H "Authorization: Bearer TU_TOKEN"
 curl -X GET "http://localhost:3000/api/reports/patients/pending-deliveries?take=50&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
 curl -X GET "http://localhost:3000/api/reports/patients/receivables?take=100&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
 curl -X GET "http://localhost:3000/api/reports/quotations/by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2" -H "Authorization: Bearer TU_TOKEN"

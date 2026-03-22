@@ -305,6 +305,7 @@ app.put('/api/auth/change-password', authMiddleware, auth.changePassword);
 app.get('/api/dashboard/summary', authMiddleware, dashboard.summary);
 
 app.get('/api/reports/patients/revenue-by-day', authMiddleware, reports.patientsRevenueByDay);
+app.get('/api/reports/patients/orders-list', authMiddleware, reports.patientsOrdersList);
 app.get('/api/reports/patients/pending-deliveries', authMiddleware, reports.patientsPendingDeliveries);
 app.get('/api/reports/patients/receivables', authMiddleware, reports.patientsReceivables);
 app.get('/api/reports/quotations/by-day', authMiddleware, reports.quotationsByDay);

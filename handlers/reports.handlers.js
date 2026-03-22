@@ -2,6 +2,7 @@ const { executeReportProcedure } = require('../db/reports.db');
 
 const INVALID_NUMBER = Symbol('invalid_number');
 const INVALID_DATE = Symbol('invalid_date');
+const INVALID_TEXT = Symbol('invalid_text');
 const VALID_ROLES = new Set(['SuperAdmin', 'Administrador', 'Empleado']);
 
 function normalizeRoleForSp(value){
@@ -26,6 +27,16 @@ function parseNonNegativeInt(value){
   const n = Number(value);
   if(!Number.isInteger(n) || n < 0) return INVALID_NUMBER;
   return n;
+}
+
+function parseOptionalText(value, { maxLength = null } = {}){
+  if(value === null || value === undefined) return null;
+
+  const text = String(value).trim();
+  if(!text) return null;
+  if(maxLength !== null && text.length > maxLength) return INVALID_TEXT;
+
+  return text;
 }
 
 function toDateOnlyValue(date){
@@ -136,7 +147,9 @@ function resolveRequestedClinicId(req){
   return null;
 }
 
-function resolveReportContext(req){
+function resolveReportContext(req, options = {}){
+  const allowAdministratorAllClinics = options.allowAdministratorAllClinics === true;
+  const requireAdministratorUserId = options.requireAdministratorUserId === true;
   const rol = normalizeRoleForSp(req.user?.rol ?? req.user?.role);
   if(!VALID_ROLES.has(rol)){
     const error = new Error('rol invalido');
@@ -162,6 +175,31 @@ function resolveReportContext(req){
     };
   }
 
+  if(rol === 'Administrador'){
+    const idClinica =
+      requestedClinicId === null
+        ? (allowAdministratorAllClinics ? 0 : null)
+        : requestedClinicId;
+
+    if(idClinica === null || (!allowAdministratorAllClinics && idClinica === 0)){
+      const error = new Error('idClinica requerido');
+      error.status = 400;
+      throw error;
+    }
+
+    if(requireAdministratorUserId && !(Number.isInteger(userIdParam) && userIdParam > 0)){
+      const error = new Error('userId invalido');
+      error.status = 401;
+      throw error;
+    }
+
+    return {
+      rol,
+      userId: requireAdministratorUserId ? userIdParam : null,
+      idClinica
+    };
+  }
+
   if(requestedClinicId === null || requestedClinicId === 0){
     const error = new Error('idClinica requerido');
     error.status = 400;
@@ -176,7 +214,7 @@ function resolveReportContext(req){
 
   return {
     rol,
-    userId: rol === 'Empleado' ? userIdParam : null,
+    userId: userIdParam,
     idClinica: requestedClinicId
   };
 }
@@ -195,9 +233,9 @@ function formatReportResponse(result){
   };
 }
 
-async function runReport(req, res, { procedureName, extraParams = [] }){
+async function runReport(req, res, { procedureName, extraParams = [], contextOptions = {} }){
   try{
-    const context = resolveReportContext(req);
+    const context = resolveReportContext(req, contextOptions);
     const result = await executeReportProcedure({
       db: req.db,
       procedureName,
@@ -235,6 +273,31 @@ async function patientsRevenueByDay(req, res){
     extraParams: [
       { name: 'DateFrom', type: req.sql.Date, value: dateRange.dateFrom },
       { name: 'DateTo', type: req.sql.Date, value: dateRange.dateTo }
+    ]
+  });
+}
+
+async function patientsOrdersList(req, res){
+  const dateRange = resolveDateRange(req.query);
+  const query = parseOptionalText(req.query?.query, { maxLength: 200 });
+
+  if(dateRange === INVALID_DATE){
+    return res.status(400).json({ message: 'dateFrom/dateTo invalidos' });
+  }
+  if(query === INVALID_TEXT){
+    return res.status(400).json({ message: 'query invalido' });
+  }
+
+  return runReport(req, res, {
+    procedureName: 'dbo.spRpt_Orders_List',
+    contextOptions: {
+      allowAdministratorAllClinics: true,
+      requireAdministratorUserId: true
+    },
+    extraParams: [
+      { name: 'DateFrom', type: req.sql.Date, value: dateRange.dateFrom },
+      { name: 'DateTo', type: req.sql.Date, value: dateRange.dateTo },
+      { name: 'Query', type: req.sql.NVarChar(200), value: query }
     ]
   });
 }
@@ -325,6 +388,7 @@ async function expensesByDay(req, res){
 
 module.exports = {
   patientsRevenueByDay,
+  patientsOrdersList,
   patientsPendingDeliveries,
   patientsReceivables,
   quotationsByDay,

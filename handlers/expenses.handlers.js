@@ -12,6 +12,10 @@ function toText(v){
 
 /** POST /api/expenses */
 async function create(req, res){
+  
+  const headerClinicId = req.headers?.['x-clinic-id'];
+  console.log('headerClinicId:: ', headerClinicId);
+
   try{
     const b = req.body || {};
     const r = await req.db.request()
@@ -20,6 +24,7 @@ async function create(req, res){
       .input('Amount', req.sql.Decimal(10,2), toNum(b.cantidad))
       .input('UserName', req.sql.NVarChar(80), toText(b.usuario))
       .input('CreatedByUserId', req.sql.Int, req.user?.userId || null)
+      .input('IdClinica', headerClinicId || null)
       .execute('spExpenses_Create');
 
     const x = r.recordset?.[0];
@@ -33,8 +38,14 @@ async function create(req, res){
 async function list(req, res){
   try{
     const take = Math.min(200, Math.max(1, Number(req.query.take || 50)));
+
+    const IdUser = req.query.userId;
+
+    console.log('IdUser:: ', IdUser);
+
     const r = await req.db.request()
       .input('Take', req.sql.Int, take)
+      .input('IdUser', req.sql.Int, IdUser)
       .execute('spExpenses_List');
 
     return res.json((r.recordset||[]).map(x=>({
@@ -42,7 +53,9 @@ async function list(req, res){
       expenseDate: x.ExpenseDate,
       description: x.Description,
       amount: Number(x.Amount ?? 0),
-      userName: x.UserName
+      userName: x.UserName,
+      codigoClinica: x.Codigo,
+      nombreClinica : x.Nombre
     })));
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
