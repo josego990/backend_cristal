@@ -123,7 +123,8 @@ function parseAssignedClinic(row) {
   return {
     clinicId,
     codigo: toText(row?.Codigo ?? row?.AssignedClinicCodigo ?? row?.codigo),
-    nombre: toText(row?.Nombre ?? row?.AssignedClinicNombre ?? row?.nombre)
+    nombre: toText(row?.Nombre ?? row?.AssignedClinicNombre ?? row?.nombre),
+    telefono: toText(row?.Telefono ?? row?.AssignedClinicTelefono ?? row?.telefono)
   };
 }
 
@@ -232,7 +233,8 @@ async function list(req, res) {
           u.CreatedAt,
           uc.ClinicId AS AssignedClinicId,
           c.Codigo AS AssignedClinicCodigo,
-          c.Nombre AS AssignedClinicNombre
+          c.Nombre AS AssignedClinicNombre,
+          c.Telefono AS AssignedClinicTelefono
         FROM dbo.Users u
         LEFT JOIN dbo.UserClinics uc
           ON uc.UserId = u.UserId
@@ -302,8 +304,8 @@ Response example (200):
     "idClinica": 1,
     "idClinicas": [1, 2],
     "clinics": [
-      { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central" },
-      { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" }
+      { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central", "telefono": "5555-0101" },
+      { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte", "telefono": "5555-0102" }
     ],
     "isActive": true,
     "createdAt": "2026-02-26T09:00:00.000Z"
@@ -405,8 +407,8 @@ Response example (201):
   "idClinica": 1,
   "idClinicas": [1, 2],
   "clinics": [
-    { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central" },
-    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" }
+    { "clinicId": 1, "codigo": "CLN-001", "nombre": "Clinica Central", "telefono": "5555-0101" },
+    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte", "telefono": "5555-0102" }
   ],
   "isActive": true,
   "createdAt": "2026-02-26T09:00:00.000Z"
@@ -530,8 +532,8 @@ Response example (200):
   "idClinica": 2,
   "idClinicas": [2, 5],
   "clinics": [
-    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte" },
-    { "clinicId": 5, "codigo": "CLN-005", "nombre": "Clinica Sur" }
+    { "clinicId": 2, "codigo": "CLN-002", "nombre": "Clinica Norte", "telefono": "5555-0102" },
+    { "clinicId": 5, "codigo": "CLN-005", "nombre": "Clinica Sur", "telefono": "5555-0105" }
   ],
   "isActive": true,
   "createdAt": "2026-02-26T09:00:00.000Z"

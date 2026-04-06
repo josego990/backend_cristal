@@ -50,6 +50,7 @@ function sanitizeClinic(row) {
     clinicId: Number(row?.ClinicId ?? row?.clinicId ?? 0) || null,
     codigo: toText(row?.Codigo ?? row?.codigo),
     nombre: toText(row?.Nombre ?? row?.nombre),
+    telefono: toText(row?.Telefono ?? row?.telefono),
     logo: toText(row?.Logo ?? row?.logo),
     estado: toBit(row?.Estado ?? row?.estado) === 1,
     createdAt: row?.CreatedAt ?? row?.createdAt ?? null,
@@ -73,6 +74,7 @@ async function create(req, res) {
 
     const codigo = toText(b.codigo);
     const nombre = toText(b.nombre);
+    const telefono = toText(b.telefono);
     const logo = toText(b.logo);
     const estado = hasOwn(b, 'estado') ? toBit(b.estado) : 1;
 
@@ -84,6 +86,7 @@ async function create(req, res) {
       .request()
       .input('Codigo', req.sql.NVarChar(50), codigo)
       .input('Nombre', req.sql.NVarChar(150), nombre)
+      .input('telefono', req.sql.NVarChar(50), telefono)
       .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
       .input('Estado', req.sql.Bit, estado)
       .execute('spClinics_Create');
@@ -92,6 +95,7 @@ async function create(req, res) {
       ClinicId: null,
       Codigo: codigo,
       Nombre: nombre,
+      Telefono: telefono,
       Logo: logo,
       Estado: estado,
       CreatedAt: null,
@@ -125,6 +129,7 @@ POST /api/clinics
 {
   "codigo": "CLN-001",
   "nombre": "Clinica Central",
+  "telefono": "5555-0101",
   "logo": "data:image/png;base64,...",
   "estado": true
 }
@@ -134,6 +139,7 @@ Response example (201):
   "clinicId": 1,
   "codigo": "CLN-001",
   "nombre": "Clinica Central",
+  "telefono": "5555-0101",
   "logo": "data:image/png;base64,...",
   "estado": true,
   "createdAt": "2026-02-23T20:10:00.000Z",
@@ -154,6 +160,7 @@ async function list(req, res) {
           ClinicId,
           Codigo,
           Nombre,
+          Telefono,
           Logo,
           Estado,
           CreatedAt,
@@ -178,6 +185,7 @@ Response example (200):
     "clinicId": 1,
     "codigo": "CLN-001",
     "nombre": "Clinica Central",
+    "telefono": "5555-0101",
     "logo": "data:image/png;base64,...",
     "estado": true,
     "createdAt": "2026-02-23T20:10:00.000Z",
@@ -195,10 +203,11 @@ async function update(req, res) {
     const b = req.body || {};
     const hasCodigo = hasOwn(b, 'codigo');
     const hasNombre = hasOwn(b, 'nombre');
+    const hasTelefono = hasOwn(b, 'telefono');
     const hasLogo = hasOwn(b, 'logo');
     const hasEstado = hasOwn(b, 'estado');
 
-    if (!hasCodigo && !hasNombre && !hasLogo && !hasEstado) {
+    if (!hasCodigo && !hasNombre && !hasTelefono && !hasLogo && !hasEstado) {
       return res.status(400).json({ message: 'No hay campos para actualizar' });
     }
 
@@ -211,6 +220,7 @@ async function update(req, res) {
           ClinicId,
           Codigo,
           Nombre,
+          Telefono,
           Logo,
           Estado,
           CreatedAt,
@@ -225,6 +235,7 @@ async function update(req, res) {
 
     const codigo = hasCodigo ? toText(b.codigo) : toText(current.Codigo);
     const nombre = hasNombre ? toText(b.nombre) : toText(current.Nombre);
+    const telefono = hasTelefono ? toText(b.telefono) : toText(current.Telefono);
     const logo = hasLogo ? toText(b.logo) : toText(current.Logo);
     const estado = hasEstado ? toBit(b.estado) : toBit(current.Estado);
 
@@ -237,6 +248,7 @@ async function update(req, res) {
       .input('ClinicId', req.sql.Int, clinicId)
       .input('Codigo', req.sql.NVarChar(50), codigo)
       .input('Nombre', req.sql.NVarChar(150), nombre)
+      .input('telefono', req.sql.NVarChar(50), telefono)
       .input('Estado', req.sql.Bit, estado)
       .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
       .execute('spClinics_Update');
@@ -245,6 +257,7 @@ async function update(req, res) {
       ClinicId: clinicId,
       Codigo: codigo,
       Nombre: nombre,
+      Telefono: telefono,
       Logo: logo,
       Estado: estado,
       CreatedAt: current.CreatedAt,
@@ -275,6 +288,7 @@ Request example:
 PUT /api/clinics/1
 {
   "nombre": "Clinica Central Actualizada",
+  "telefono": "5555-0199",
   "estado": false
 }
 
@@ -283,6 +297,7 @@ Response example (200):
   "clinicId": 1,
   "codigo": "CLN-001",
   "nombre": "Clinica Central Actualizada",
+  "telefono": "5555-0199",
   "logo": "data:image/png;base64,...",
   "estado": false,
   "createdAt": "2026-02-23T20:10:00.000Z",
@@ -337,6 +352,7 @@ async function listByUserId(req, res) {
           c.ClinicId,
           c.Codigo,
           c.Nombre,
+          c.Telefono,
           c.Logo,
           c.Estado,
           c.CreatedAt,
@@ -364,6 +380,7 @@ Response example (200):
     "clinicId": 1,
     "codigo": "CLN-001",
     "nombre": "Clinica Central",
+    "telefono": "5555-0101",
     "logo": "data:image/png;base64,...",
     "estado": true,
     "createdAt": "2026-02-23T20:10:00.000Z",

@@ -79,7 +79,8 @@ BEGIN
   DECLARE @ProductsJson NVARCHAR(MAX) = NULLIF(LTRIM(RTRIM(@Products)), '');
   DECLARE @CurrentProductsJson NVARCHAR(MAX) = NULL;
   DECLARE @CurrentIdClinica INT = NULL;
-  DECLARE @OrderNo INT = NULL;
+  DECLARE @CurrentOrderNo INT = NULL;
+  DECLARE @FinalOrderNo INT = NULL;
 
   DECLARE @ParsedProducts TABLE
   (
@@ -119,8 +120,12 @@ BEGIN
       PRIMARY KEY (ProductId, IdClinica)
   );
 
-  IF @IdClinica IS NOT NULL
-     AND NOT EXISTS (SELECT 1 FROM dbo.Clinics WHERE ClinicId = @IdClinica)
+  IF @IdClinica IS NULL OR @IdClinica <= 0
+  BEGIN
+      THROW 50029, 'IdClinica es requerida para mantener numero de orden por clinica.', 1;
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM dbo.Clinics WHERE ClinicId = @IdClinica)
   BEGIN
       THROW 50020, 'La clinica enviada no existe.', 1;
   END
@@ -136,13 +141,13 @@ BEGIN
     BEGIN TRAN;
 
     SELECT TOP(1)
-      @OrderNo = p.OrderNo,
+      @CurrentOrderNo = p.OrderNo,
       @CurrentIdClinica = p.IdClinica,
       @CurrentProductsJson = NULLIF(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), p.Products))), '')
     FROM dbo.Patients p WITH (UPDLOCK, HOLDLOCK)
     WHERE p.PatientId = @PatientId;
 
-    IF @OrderNo IS NULL
+    IF @CurrentOrderNo IS NULL
     BEGIN
       THROW 50028, 'El paciente indicado no existe.', 1;
     END
@@ -216,12 +221,11 @@ BEGIN
         THROW 50023, 'Cada producto debe incluir idClinica o la orden debe tener IdClinica.', 1;
       END
 
-      IF @IdClinica IS NOT NULL
-         AND EXISTS (
-           SELECT 1
-           FROM @ParsedProducts
-           WHERE IdClinica <> @IdClinica
-         )
+      IF EXISTS (
+        SELECT 1
+        FROM @ParsedProducts
+        WHERE IdClinica <> @IdClinica
+      )
       BEGIN
         THROW 50024, 'Todos los productos deben pertenecer a la misma clinica de la orden.', 1;
       END
@@ -233,6 +237,38 @@ BEGIN
         IdClinica
       FROM @ParsedProducts
       GROUP BY ProductId, IdClinica;
+    END
+
+    SET @FinalOrderNo = @CurrentOrderNo;
+
+    IF ISNULL(@CurrentIdClinica, 0) <> @IdClinica
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM dbo.Clinics WITH (UPDLOCK, HOLDLOCK)
+        WHERE ClinicId = @IdClinica
+      )
+      BEGIN
+        THROW 50020, 'La clinica enviada no existe.', 1;
+      END
+
+      UPDATE coc
+      SET
+        @FinalOrderNo = coc.NextOrderNo,
+        coc.NextOrderNo = coc.NextOrderNo + 1,
+        coc.UpdatedAt = SYSDATETIME()
+      FROM dbo.ClinicOrderCounters coc WITH (UPDLOCK, HOLDLOCK)
+      WHERE coc.ClinicId = @IdClinica;
+
+      IF @FinalOrderNo IS NULL
+      BEGIN
+        SELECT @FinalOrderNo = ISNULL(MAX(p.OrderNo), 0) + 1
+        FROM dbo.Patients p WITH (UPDLOCK, HOLDLOCK)
+        WHERE p.IdClinica = @IdClinica;
+
+        INSERT INTO dbo.ClinicOrderCounters (ClinicId, NextOrderNo, UpdatedAt)
+        VALUES (@IdClinica, @FinalOrderNo + 1, SYSDATETIME());
+      END
     END
 
     INSERT INTO @InventoryDelta (ProductId, IdClinica, DeltaQty)
@@ -273,6 +309,7 @@ BEGIN
 
     UPDATE dbo.Patients
     SET
+      OrderNo = @FinalOrderNo,
       ExamDate = @ExamDate,
       Name = @Name,
       Address = @Address,

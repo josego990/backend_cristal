@@ -386,6 +386,21 @@ async function expensesByDay(req, res){
   });
 }
 
+async function expensesDetail(req, res){
+  const dateRange = resolveDateRange(req.query);
+  if(dateRange === INVALID_DATE){
+    return res.status(400).json({ message: 'dateFrom/dateTo invalidos' });
+  }
+
+  return runReport(req, res, {
+    procedureName: 'dbo.spRpt_Expenses_Detail',
+    extraParams: [
+      { name: 'DateFrom', type: req.sql.Date, value: dateRange.dateFrom },
+      { name: 'DateTo', type: req.sql.Date, value: dateRange.dateTo }
+    ]
+  });
+}
+
 module.exports = {
   patientsRevenueByDay,
   patientsOrdersList,
@@ -394,5 +409,6 @@ module.exports = {
   quotationsByDay,
   inventoryValuation,
   inventoryLowStock,
-  expensesByDay
+  expensesByDay,
+  expensesDetail
 };

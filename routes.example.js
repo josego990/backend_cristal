@@ -28,6 +28,7 @@ module.exports = function registerRoutes(app, authMiddleware){
   app.get('/api/reports/inventory/valuation', authMiddleware, reports.inventoryValuation);
   app.get('/api/reports/inventory/low-stock', authMiddleware, reports.inventoryLowStock);
   app.get('/api/reports/expenses/by-day', authMiddleware, reports.expensesByDay);
+  app.get('/api/reports/expenses/detail', authMiddleware, reports.expensesDetail);
 
   // Pacientes
   app.post('/api/patients', authMiddleware, patients.create);
@@ -78,4 +79,5 @@ curl -X GET "http://localhost:3000/api/reports/quotations/by-day?dateFrom=2026-0
 curl -X GET "http://localhost:3000/api/reports/inventory/valuation?idClinica=2" -H "Authorization: Bearer TU_TOKEN"
 curl -X GET "http://localhost:3000/api/reports/inventory/low-stock?threshold=3&take=200&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
 curl -X GET "http://localhost:3000/api/reports/expenses/by-day?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
+curl -X GET "http://localhost:3000/api/reports/expenses/detail?dateFrom=2026-02-14&dateTo=2026-03-15&idClinica=2" -H "Authorization: Bearer TU_TOKEN"
 */

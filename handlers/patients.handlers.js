@@ -52,6 +52,16 @@ function normalizeRole(value){
   return String(value ?? '').trim().toLowerCase();
 }
 
+function normalizeRoleForSp(value){
+  const raw = String(value ?? '').trim();
+  const lower = raw.toLowerCase();
+
+  if(lower === 'superadmin') return 'SuperAdmin';
+  if(lower === 'administrador') return 'Administrador';
+  if(lower === 'empleado') return 'Empleado';
+  return raw;
+}
+
 function canEditExistingPatient(user){
   const role = normalizeRole(user?.rol ?? user?.role);
   return role === 'superadmin' || role === 'administrador';
@@ -429,17 +439,23 @@ async function update(req, res){
 async function search(req, res) {
   try {
 
+    console.log('ENTRA A CONSULTAR ORDENES POR ID CLINICA Y POR ID USUARIO');
     console.log('app.get("/api/patients/search", authMiddleware, patients.search);');
 
 
     const q = String(req.query.q || '').trim();
-    const idClinica = resolveClinicScopeId(req);
+    const requestedClinicId = req.query?.idClinica ?? req.query?.clinicId ?? req.headers?.['x-clinic-id'];
+    const idClinica = requestedClinicId === undefined ? 0 : toClinicScopeId(requestedClinicId);
+    const rol = normalizeRoleForSp(req.user?.rol ?? req.user?.role);
+    const userId = Number(req.user?.userId ?? req.user?.sub);
     if(idClinica === INVALID_NUMBER){
       return res.status(400).json({ message: 'idClinica invalido' });
     }
 
     const r = await req.db.request()
       .input('Query', req.sql.NVarChar(200), q)
+      .input('Rol', req.sql.NVarChar(20), rol)
+      .input('UserId', req.sql.Int, Number.isInteger(userId) && userId > 0 ? userId : null)
       .input('IdClinica', req.sql.Int, idClinica)
       .execute('spPatients_Search');
 
@@ -451,9 +467,14 @@ async function search(req, res) {
       phone: x.Phone,
       balance: Number(x.Balance ?? 0),
       deliveredBy: x.DeliveredBy,
-      idClinica: x.IdClinica ?? null
+      idClinica: x.IdClinica ?? null,
+      nombreClinica: x.NombreClinica ?? null
     })));
   }catch(err){
+    const number = getSqlErrorNumber(err);
+    if([50071,50072,50073,50074].includes(number)){
+      return res.status(400).json({ message: err.message || 'Parametros invalidos para buscar pacientes' });
+    }
     return res.status(500).json({ message: err.message || 'Error' });
   }
 }
@@ -462,7 +483,7 @@ async function search(req, res) {
 async function getById(req, res){
   try{
 
-    console.log('app.get("/api/patients/:id", authMiddleware, patients.getById);');
+    console.log('app.get("/api/patients/:id", authMiddleware, patients.getById ');
 
     const id = Number(req.params.id);
     const idClinica = resolveClinicScopeId(req);
@@ -478,7 +499,7 @@ async function getById(req, res){
     const x = r.recordset?.[0];
     if(!x) return res.status(404).json({ message: 'No encontrado' });
 
-    console.log('LOL TE JODES:: ', x);
+    //console.log('LOL TE JODES:: ', x);
 
     return res.json({
       patientId: x.PatientId,
@@ -566,9 +587,12 @@ async function getById(req, res){
 
 /** GET /api/patients/order/:orderNo */ //se agrega validación por usuario
 async function getByOrder(req, res){
-  //console.log('req en getByOrder: ', req);
+  console.log('choricito req en getByOrder: ', req.params);
   try{
     const orderNo = Number(req.params.orderNo);
+    if(!Number.isInteger(orderNo) || orderNo < 1){
+      return res.status(400).json({ message: 'orderNo invalido' });
+    }
     
     const idClinica = resolveClinicScopeId(req);
 
@@ -576,6 +600,9 @@ async function getByOrder(req, res){
 
     if(idClinica === INVALID_NUMBER){
       return res.status(400).json({ message: 'idClinica invalido' });
+    }
+    if(idClinica < 1){
+      return res.status(400).json({ message: 'idClinica requerido para buscar por numero de orden' });
     }
 
     const r = await req.db.request()
@@ -629,6 +656,10 @@ async function getByOrder(req, res){
       hasSecreciones: x.HasSecreciones
     });
   }catch(err){
+    const number = getSqlErrorNumber(err);
+    if(number === 50029){
+      return res.status(400).json({ message: err.message || 'idClinica requerido para buscar por numero de orden' });
+    }
     return res.status(500).json({ message: err.message || 'Error' });
   }
 }

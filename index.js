@@ -312,6 +312,7 @@ app.get('/api/reports/quotations/by-day', authMiddleware, reports.quotationsByDa
 app.get('/api/reports/inventory/valuation', authMiddleware, reports.inventoryValuation);
 app.get('/api/reports/inventory/low-stock', authMiddleware, reports.inventoryLowStock);
 app.get('/api/reports/expenses/by-day', authMiddleware, reports.expensesByDay);
+app.get('/api/reports/expenses/detail', authMiddleware, reports.expensesDetail);
 
 app.post('/api/patients', authMiddleware, patients.create);
 app.get('/api/patients/search', authMiddleware, patients.search);
