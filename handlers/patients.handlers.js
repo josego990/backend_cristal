@@ -82,6 +82,15 @@ function toText(v){
   return t.length ? t : null;
 }
 
+function firstText(...values){
+  for(const value of values){
+    const text = toText(value);
+    if(text !== null) return text;
+  }
+
+  return null;
+}
+
 function toJsonText(v){
   if(v === null || v === undefined) return null;
 
@@ -177,6 +186,24 @@ function mapPatientBody(b){
     Rx_OI_Add: toText(b.opto_oi_adicion),
     Rx_OI_Alt: toText(b.opto_oi_altura),
 
+    Rx_AV_OD_20: toText(b.av_od_20),
+    Rx_AV_OI_20: toText(b.av_oi_20),
+
+    //receta inicial
+    Rxi_OD_Sphere: toText(b.rxiOdSphere),
+    Rxi_OD_Cyl: toText(b.rxiOdCyl),
+    Rxi_OD_Axis: toText(b.rxiOdAxis),
+    Rxi_OD_Add: toText(b.rxiOdAdd),
+    Rxi_OD_Alt: toText(b.rxiOdAlt),
+
+    Rxi_OI_Sphere: toText(b.rxiOiSphere),
+    Rxi_OI_Cyl: toText(b.rxiOiCyl),
+    Rxi_OI_Axis: toText(b.rxiOiAxis),
+    Rxi_OI_Add: toText(b.rxiOiAdd),
+    Rxi_OI_Alt: toText(b.rxiOiAlt),
+    Rxi_AV_OD_20: toText(b.rxiAvOd20),
+    Rxi_AV_OI_20: toText(b.rxiAvOi20),
+
     Frame: toText(b.aro),
     Dip: toText(b.dip),
     Material: toText(b.material),
@@ -262,6 +289,22 @@ async function create(req, res){
       .input('Rx_OI_Axis', req.sql.NVarChar(20), p.Rx_OI_Axis)
       .input('Rx_OI_Add', req.sql.NVarChar(20), p.Rx_OI_Add)
       .input('Rx_OI_Alt', req.sql.NVarChar(20), p.Rx_OI_Alt)
+
+      .input('Rx_AV_OD_20', req.sql.NVarChar(20), p.Rx_AV_OD_20)
+      .input('Rx_AV_OI_20', req.sql.NVarChar(20), p.Rx_AV_OI_20)
+
+      .input('Rxi_OD_Sphere', req.sql.NVarChar(20), p.Rxi_OD_Sphere)
+      .input('Rxi_OD_Cyl', req.sql.NVarChar(20), p.Rxi_OD_Cyl)
+      .input('Rxi_OD_Axis', req.sql.NVarChar(20), p.Rxi_OD_Axis)
+      .input('Rxi_OD_Add', req.sql.NVarChar(20), p.Rxi_OD_Add)
+      .input('Rxi_OD_Alt', req.sql.NVarChar(20), p.Rxi_OD_Alt)
+      .input('Rxi_OI_Sphere', req.sql.NVarChar(20), p.Rxi_OI_Sphere)
+      .input('Rxi_OI_Cyl', req.sql.NVarChar(20), p.Rxi_OI_Cyl)
+      .input('Rxi_OI_Axis', req.sql.NVarChar(20), p.Rxi_OI_Axis)
+      .input('Rxi_OI_Add', req.sql.NVarChar(20), p.Rxi_OI_Add)
+      .input('Rxi_OI_Alt', req.sql.NVarChar(20), p.Rxi_OI_Alt)
+      .input('Rxi_AV_OD_20', req.sql.NVarChar(20), p.Rxi_AV_OD_20)
+      .input('Rxi_AV_OI_20', req.sql.NVarChar(20), p.Rxi_AV_OI_20)
 
       .input('Frame', req.sql.NVarChar(80), p.Frame)
       .input('Dip', req.sql.NVarChar(30), p.Dip)
@@ -400,6 +443,22 @@ async function update(req, res){
       .input('Rx_OI_Axis', req.sql.NVarChar(20), p.Rx_OI_Axis)
       .input('Rx_OI_Add', req.sql.NVarChar(20), p.Rx_OI_Add)
       .input('Rx_OI_Alt', req.sql.NVarChar(20), p.Rx_OI_Alt)
+
+      .input('Rx_AV_OD_20', req.sql.NVarChar(20), p.Rx_AV_OD_20)
+      .input('Rx_AV_OI_20', req.sql.NVarChar(20), p.Rx_AV_OI_20)
+
+      .input('Rxi_OD_Sphere', req.sql.NVarChar(20), p.Rxi_OD_Sphere)
+      .input('Rxi_OD_Cyl', req.sql.NVarChar(20), p.Rxi_OD_Cyl)
+      .input('Rxi_OD_Axis', req.sql.NVarChar(20), p.Rxi_OD_Axis)
+      .input('Rxi_OD_Add', req.sql.NVarChar(20), p.Rxi_OD_Add)
+      .input('Rxi_OD_Alt', req.sql.NVarChar(20), p.Rxi_OD_Alt)
+      .input('Rxi_OI_Sphere', req.sql.NVarChar(20), p.Rxi_OI_Sphere)
+      .input('Rxi_OI_Cyl', req.sql.NVarChar(20), p.Rxi_OI_Cyl)
+      .input('Rxi_OI_Axis', req.sql.NVarChar(20), p.Rxi_OI_Axis)
+      .input('Rxi_OI_Add', req.sql.NVarChar(20), p.Rxi_OI_Add)
+      .input('Rxi_OI_Alt', req.sql.NVarChar(20), p.Rxi_OI_Alt)
+      .input('Rxi_AV_OD_20', req.sql.NVarChar(20), p.Rxi_AV_OD_20)
+      .input('Rxi_AV_OI_20', req.sql.NVarChar(20), p.Rxi_AV_OI_20)
 
       .input('Frame', req.sql.NVarChar(80), p.Frame)
       .input('Dip', req.sql.NVarChar(30), p.Dip)
@@ -560,6 +619,22 @@ async function getById(req, res){
       rxOiAdd: x.Rx_OI_Add,
       rxOiAlt: x.Rx_OI_Alt,
 
+      rx_AV_OD_20: x.Rx_AV_OD_20,
+      rx_AV_OI_20: x.Rx_AV_OI_20,
+
+      rxiOdSphere: x.Rxi_OD_Sphere,
+      rxiOdCyl: x.Rxi_OD_Cyl,
+      rxiOdAxis: x.Rxi_OD_Axis,
+      rxiOdAdd: x.Rxi_OD_Add,
+      rxiOdAlt: x.Rxi_OD_Alt,
+      rxiOiSphere: x.Rxi_OI_Sphere,
+      rxiOiCyl: x.Rxi_OI_Cyl,
+      rxiOiAxis: x.Rxi_OI_Axis,
+      rxiOiAdd: x.Rxi_OI_Add,
+      rxiOiAlt: x.Rxi_OI_Alt,
+      rxiAvOd20: x.Rxi_AV_OD_20,
+      rxiAvOi20: x.Rxi_AV_OI_20,
+
       frame: x.Frame,
       dip: x.Dip,
       material: x.Material,
@@ -625,6 +700,18 @@ async function getByOrder(req, res){
       nombreUsuario: x.NombreUsuario,
       phone: x.Phone,
       optometrist: x.Optometrist,
+      rxiOdSphere: x.Rxi_OD_Sphere,
+      rxiOdCyl: x.Rxi_OD_Cyl,
+      rxiOdAxis: x.Rxi_OD_Axis,
+      rxiOdAdd: x.Rxi_OD_Add,
+      rxiOdAlt: x.Rxi_OD_Alt,
+      rxiOiSphere: x.Rxi_OI_Sphere,
+      rxiOiCyl: x.Rxi_OI_Cyl,
+      rxiOiAxis: x.Rxi_OI_Axis,
+      rxiOiAdd: x.Rxi_OI_Add,
+      rxiOiAlt: x.Rxi_OI_Alt,
+      rxiAvOd20: x.Rxi_AV_OD_20,
+      rxiAvOi20: x.Rxi_AV_OI_20,
       frame: x.Frame,
       dip: x.Dip,
       material: x.Material,

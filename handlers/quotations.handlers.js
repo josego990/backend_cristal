@@ -82,6 +82,18 @@ async function create(req, res){
       .input('Total', req.sql.Decimal(10,2), toNum(b.total))
       .input('IdClinica', req.sql.Int, idClinica)
       .input('CreatedByUserId', req.sql.Int, req.user?.userId || null)
+
+      //nuevos campos
+      .input('Rx_OD_Sphere', req.sql.NVarChar(20), toText(b.rxOdSphere)) 
+      .input('Rx_OD_Cyl', req.sql.NVarChar(20), toText(b.rxOdCyl))
+      .input('Rx_OD_Axis', req.sql.NVarChar(20), toText(b.rxOdAxis)) 
+      .input('Rx_OD_Add', req.sql.NVarChar(20), toText(b.rxOdAdd)) 
+      .input('Rx_OI_Sphere', req.sql.NVarChar(20), toText(b.rxOiSphere)) 
+      .input('Rx_OI_Cyl', req.sql.NVarChar(20), toText(b.rxOiCyl)) 
+      .input('Rx_OI_Axis', req.sql.NVarChar(20), toText(b.rxOiAxis))
+      .input('Rx_OI_Add', req.sql.NVarChar(20), toText(b.rxOiAdd)) 
+
+
       .execute('spQuotations_Create');
 
     const x = r.recordset?.[0] || {};
@@ -122,7 +134,19 @@ async function list(req, res){
       lens: x.Lens,
       treatment: x.Treatment,
       total: Number(x.Total ?? 0),
-      idClinica: x.IdClinica ?? null
+      idClinica: x.IdClinica ?? null,
+
+       Rx_OD_Sphere: x.Rx_OD_Sphere,
+        Rx_OD_Cyl: x.Rx_OD_Cyl,
+        Rx_OD_Axis: x.Rx_OD_Axis,
+        Rx_OD_Add: x.Rx_OD_Add,
+
+        Rx_OI_Sphere: x.Rx_OI_Sphere,
+        Rx_OI_Cyl: x.Rx_OI_Cyl,
+        Rx_OI_Axis: x.Rx_OI_Axis,
+        Rx_OI_Add: x.Rx_OI_Add
+
+
     })));
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });
@@ -160,7 +184,19 @@ async function getById(req, res){
       lens: x.Lens,
       treatment: x.Treatment,
       total: Number(x.Total ?? 0),
-      idClinica: x.IdClinica ?? null
+      idClinica: x.IdClinica ?? null,
+
+        Rx_OD_Sphere: x.Rx_OD_Sphere,
+        Rx_OD_Cyl: x.Rx_OD_Cyl,
+        Rx_OD_Axis: x.Rx_OD_Axis,
+        Rx_OD_Add: x.Rx_OD_Add,
+
+        Rx_OI_Sphere: x.Rx_OI_Sphere,
+        Rx_OI_Cyl: x.Rx_OI_Cyl,
+        Rx_OI_Axis: x.Rx_OI_Axis,
+        Rx_OI_Add: x.Rx_OI_Add
+
+
     });
   }catch(err){
     return res.status(500).json({ message: err.message || 'Error' });

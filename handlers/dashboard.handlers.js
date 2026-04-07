@@ -107,6 +107,7 @@ async function summary(req, res){
         pendingDeliveries: k.PendingDeliveries ?? 0,
         pendingBalance: Number(k.PendingBalance ?? 0),
         idClinica: k.IdClinica ?? null,
+        codigoClinica: k.CodClinica ?? k.CodigoClinica ?? null,
         nombreClinica: k.NombreClinica ?? null
       },
       pending: pending.map(x=>({
@@ -118,6 +119,7 @@ async function summary(req, res){
         balance: Number(x.Balance ?? 0),
         labCode: x.LabCode,
         idClinica: x.IdClinica ?? null,
+        codigoClinica: x.CodClinica ?? x.CodigoClinica ?? null,
         nombreClinica: x.NombreClinica ?? null
       }))
     });
