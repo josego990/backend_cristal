@@ -93,6 +93,7 @@ CREATE TABLE [dbo].[Patients](
 	[ExamDate] [date] NOT NULL,
 	[Name] [nvarchar](150) NOT NULL,
 	[Address] [nvarchar](200) NULL,
+	[Profession] [nvarchar](120) NULL,
 	[Phone] [nvarchar](30) NULL,
 	[Optometrist] [nvarchar](50) NULL,
 	[IsFirstExam] [bit] NULL,
@@ -856,6 +857,7 @@ CREATE PROC [dbo].[spPatients_Create]
   @ExamDate DATE,
   @Name NVARCHAR(150),
   @Address NVARCHAR(200)=NULL,
+  @Profession NVARCHAR(120)=NULL,
   @Phone NVARCHAR(30)=NULL,
   @Optometrist NVARCHAR(50)=NULL,
   @IdClinica INT = NULL,
@@ -1081,7 +1083,7 @@ BEGIN
     END
 
     INSERT INTO dbo.Patients(
-      OrderNo, ExamDate, Name, Address, Phone, Optometrist, IdClinica,
+      OrderNo, ExamDate, Name, Address, Profession, Phone, Optometrist, IdClinica,
       IsFirstExam, UsesRx, HasDiabetes, HasBlindness, HasHypertension,
       HasCefalea, HasArdorOcular, HasDolorOcular, HasPrurito, HasFotofobia, HasBlindness2, HasVisionBorrosa, HasSecreciones,
       OD_Sphere_Lensometry, OD_Cyl_Lensometry, OD_Axis_Lensometry, OD_Add_Lensometry,
@@ -1095,7 +1097,7 @@ BEGIN
       CreatedByUserId
     )
     VALUES(
-      @OrderNo, @ExamDate, @Name, @Address, @Phone, @Optometrist, @IdClinica,
+      @OrderNo, @ExamDate, @Name, @Address, @Profession, @Phone, @Optometrist, @IdClinica,
       @IsFirstExam, @UsesRx, @HasDiabetes, @HasBlindness, @HasHypertension,
       @HasCefalea, @HasArdorOcular, @HasDolorOcular, @HasPrurito, @HasFotofobia, @HasBlindness2, @HasVisionBorrosa, @HasSecreciones,
       @OD_Sphere_Lensometry, @OD_Cyl_Lensometry, @OD_Axis_Lensometry, @OD_Add_Lensometry,
@@ -1139,6 +1141,7 @@ BEGIN
       PatientId,
       OrderNo,
       Name,
+      Profession,
       IdClinica,
       Products
   FROM dbo.Patients
@@ -1324,6 +1327,7 @@ CREATE PROC [dbo].[spPatients_Update]
   @ExamDate DATE,
   @Name NVARCHAR(150),
   @Address NVARCHAR(200)=NULL,
+  @Profession NVARCHAR(120)=NULL,
   @Phone NVARCHAR(30)=NULL,
   @Optometrist NVARCHAR(50)=NULL,
   @IdClinica INT = NULL,
@@ -1635,6 +1639,7 @@ BEGIN
       ExamDate = @ExamDate,
       Name = @Name,
       Address = @Address,
+      Profession = @Profession,
       Phone = @Phone,
       Optometrist = @Optometrist,
       IdClinica = @IdClinica,
@@ -1729,6 +1734,7 @@ BEGIN
       PatientId,
       OrderNo,
       Name,
+      Profession,
       IdClinica,
       Products
   FROM dbo.Patients

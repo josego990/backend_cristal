@@ -132,6 +132,7 @@ function mapPatientBody(b){
     ExamDate: toText(b.fecha),
     Name: toText(b.nombre),
     Address: toText(b.direccion),
+    Profession: toText(b.profesion ?? b.profession),
     Phone: toText(b.telefono),
     Optometrist: toText(b.opt || b['Opt.']),
     IdClinica: toClinicId(b.idClinica ?? b.clinicId ?? b.id_clinica),
@@ -237,6 +238,7 @@ async function create(req, res){
       .input('ExamDate', req.sql.Date, p.ExamDate)
       .input('Name', req.sql.NVarChar(150), p.Name)
       .input('Address', req.sql.NVarChar(200), p.Address)
+      .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
@@ -322,11 +324,14 @@ async function create(req, res){
       .input('CreatedByUserId', req.sql.Int, req.user?.userId || null)
       .execute('spPatients_Create');
 
+      console.log('ERES MUY TIERNO HOMERO:: ', p.ExamDate);
+
     const row = r.recordset?.[0];
     return res.json({
       patientId: row.PatientId,
       orderNo: row.OrderNo,
       name: row.Name,
+      profession: row.Profession ?? p.Profession,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       products: fromJsonText(row.Products ?? p.ProductsJson, [])
     });
@@ -391,6 +396,7 @@ async function update(req, res){
       .input('ExamDate', req.sql.Date, p.ExamDate)
       .input('Name', req.sql.NVarChar(150), p.Name)
       .input('Address', req.sql.NVarChar(200), p.Address)
+      .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
@@ -481,6 +487,7 @@ async function update(req, res){
       patientId: row.PatientId,
       orderNo: row.OrderNo,
       name: row.Name,
+      profession: row.Profession ?? p.Profession,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       products: fromJsonText(row.Products ?? p.ProductsJson, [])
     });
@@ -568,6 +575,7 @@ async function getById(req, res){
       idClinica: x.IdClinica ?? null,
       nombreUsuario: x.FullName,
       address: x.Address,
+      profession: x.Profession,
       phone: x.Phone,
       optometrist: x.Optometrist,
 
@@ -698,6 +706,8 @@ async function getByOrder(req, res){
       idClinica: x.IdClinica ?? null,
       nombreClinica: x.NombreClinica ?? x.ClinicName ?? null,
       nombreUsuario: x.NombreUsuario,
+      address: x.Address,
+      profession: x.Profession,
       phone: x.Phone,
       optometrist: x.Optometrist,
       rxiOdSphere: x.Rxi_OD_Sphere,

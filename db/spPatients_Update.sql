@@ -3,6 +3,7 @@ ALTER PROC [dbo].[spPatients_Update]
   @ExamDate DATE,
   @Name NVARCHAR(150),
   @Address NVARCHAR(200)=NULL,
+  @Profession NVARCHAR(120)=NULL,
   @Phone NVARCHAR(30)=NULL,
   @Optometrist NVARCHAR(50)=NULL,
   @IdClinica INT = NULL,
@@ -313,6 +314,7 @@ BEGIN
       ExamDate = @ExamDate,
       Name = @Name,
       Address = @Address,
+      Profession = @Profession,
       Phone = @Phone,
       Optometrist = @Optometrist,
       IdClinica = @IdClinica,
@@ -407,6 +409,7 @@ BEGIN
       PatientId,
       OrderNo,
       Name,
+      Profession,
       IdClinica,
       Products
   FROM dbo.Patients
