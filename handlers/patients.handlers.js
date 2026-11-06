@@ -134,6 +134,7 @@ function mapPatientBody(b){
     Address: toText(b.direccion),
     Profession: toText(b.profesion ?? b.profession),
     Phone: toText(b.telefono),
+    BirthMonth: toBirthMonth(b.mes_nacimiento ?? b.birthMonth),
     Optometrist: toText(b.opt || b['Opt.']),
     IdClinica: toClinicId(b.idClinica ?? b.clinicId ?? b.id_clinica),
 
@@ -226,6 +227,7 @@ function mapPatientBody(b){
 async function create(req, res){
   try{
     const p = mapPatientBody(req.body || {});
+    if(p.BirthMonth === INVALID_NUMBER) return res.status(400).json({ message:'Mes nacimiento debe estar entre 1 y 12.' });
     if(!p.ExamDate || !p.Name){
       return res.status(400).json({ message: 'fecha y nombre son requeridos' });
     }
@@ -242,6 +244,7 @@ async function create(req, res){
       .input('Address', req.sql.NVarChar(200), p.Address)
       .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
+      .input('BirthMonth', req.sql.TinyInt, p.BirthMonth)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
 
@@ -336,6 +339,7 @@ async function create(req, res){
       orderNo: row.OrderNo,
       name: row.Name,
       profession: row.Profession ?? p.Profession,
+      birthMonth: row.BirthMonth ?? null,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       avOdSl: row.AV_OD_SL ?? null,
       avOiSl: row.AV_OI_SL ?? null,
@@ -387,6 +391,10 @@ async function update(req, res){
     }
 
     const p = mapPatientBody(req.body || {});
+    if(p.BirthMonth === INVALID_NUMBER) return res.status(400).json({ message:'Mes nacimiento debe estar entre 1 y 12.' });
+    if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'mes_nacimiento') && !Object.prototype.hasOwnProperty.call(req.body || {}, 'birthMonth')){
+      p.BirthMonth = existing.recordset[0].BirthMonth ?? null;
+    }
     if(!p.ExamDate || !p.Name){
       return res.status(400).json({ message: 'fecha y nombre son requeridos' });
     }
@@ -404,6 +412,7 @@ async function update(req, res){
       .input('Address', req.sql.NVarChar(200), p.Address)
       .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
+      .input('BirthMonth', req.sql.TinyInt, p.BirthMonth)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
 
@@ -496,6 +505,7 @@ async function update(req, res){
       orderNo: row.OrderNo,
       name: row.Name,
       profession: row.Profession ?? p.Profession,
+      birthMonth: row.BirthMonth ?? null,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       avOdSl: row.AV_OD_SL ?? null,
       avOiSl: row.AV_OI_SL ?? null,
@@ -542,6 +552,7 @@ async function search(req, res) {
       name: x.Name,
       phone: x.Phone,
       balance: Number(x.Balance ?? 0),
+      birthMonth: x.BirthMonth ?? null,
       deliveredBy: x.DeliveredBy,
       avOdSl: x.AV_OD_SL ?? null,
       avOiSl: x.AV_OI_SL ?? null,
@@ -589,6 +600,7 @@ async function getById(req, res){
       address: x.Address,
       profession: x.Profession,
       phone: x.Phone,
+      birthMonth: x.BirthMonth ?? null,
       optometrist: x.Optometrist,
 
       isFirstExam: x.IsFirstExam,
@@ -723,6 +735,7 @@ async function getByOrder(req, res){
       address: x.Address,
       profession: x.Profession,
       phone: x.Phone,
+      birthMonth: x.BirthMonth ?? null,
       optometrist: x.Optometrist,
       avOd20: x.AV_OD_20,
       avOi20: x.AV_OI_20,
@@ -844,7 +857,166 @@ async function confirmDelivery(req, res){
   }
 }
 
+function toBirthMonth(value){
+  if(value === null || value === undefined) return null;
+  if(typeof value !== 'number' && typeof value !== 'string') return INVALID_NUMBER;
+  if(String(value).trim() === '') return null;
+  const month = Number(value);
+  return Number.isInteger(month) && month >= 1 && month <= 12 ? month : INVALID_NUMBER;
+}
+
+function currentBirthMonth(){
+  return Number(new Intl.DateTimeFormat('en-US', { month:'numeric', timeZone:'America/Guatemala' }).format(new Date()));
+}
+
+function careError(message, status=400){
+  const error = new Error(message);
+  error.status = status;
+  return error;
+}
+
+function careInteger(value, fallback, min, max){
+  if(value === undefined || value === null || value === '') return fallback;
+  if(typeof value !== 'string' && typeof value !== 'number') throw careError('Paginacion invalida.');
+  const number = Number(value);
+  if(!Number.isInteger(number) || number < min || number > max) throw careError('Paginacion invalida.');
+  return number;
+}
+
+function careRequestOptions(req){
+  const rol = normalizeRoleForSp(req.user?.rol ?? req.user?.role);
+  const userId = Number(req.user?.userId ?? req.user?.sub);
+  if(!['SuperAdmin', 'Administrador', 'Empleado'].includes(rol) || !Number.isInteger(userId) || userId < 1){
+    throw careError('Usuario no autorizado.', 403);
+  }
+  const idClinica = resolveClinicScopeId(req);
+  if(idClinica === INVALID_NUMBER || idClinica > 2147483647) throw careError('idClinica invalido.');
+  const query = String(req.query?.q ?? '').trim();
+  if(query.length > 200) throw careError('La busqueda no puede exceder 200 caracteres.');
+  return {
+    rol, userId, idClinica, query,
+    skip:careInteger(req.query?.skip, 0, 0, 2147483647),
+    take:careInteger(req.query?.take, 50, 1, 100)
+  };
+}
+
+function careSqlRequest(req, options){
+  return req.db.request()
+    .input('Rol', req.sql.NVarChar(20), options.rol)
+    .input('UserId', req.sql.Int, options.userId)
+    .input('IdClinica', req.sql.Int, options.idClinica);
+}
+
+function careDate(value){
+  if(value === undefined || value === null || value === '') return null;
+  if(typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < 1) throw careError('Fecha invalida.');
+  const date = new Date(`${value}T00:00:00Z`);
+  if(!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== value) throw careError('Fecha invalida.');
+  return value;
+}
+
+function mapCarePatient(row){
+  return {
+    patientId:row.PatientId, orderNo:row.OrderNo, examDate:row.ExamDate,
+    name:row.Name, phone:row.Phone, birthMonth:row.BirthMonth ?? null,
+    idClinica:row.IdClinica, codigoClinica:row.CodigoClinica, nombreClinica:row.NombreClinica
+  };
+}
+
+function feedbackFields(row={}){
+  return {
+    contacted:Boolean(row.ContactedAt), contactedAt:row.ContactedAt ?? null,
+    contactedBy:row.ContactedByName ?? null,
+    feedbackMessage:row.Message ?? '', feedbackNotes:row.Notes ?? '',
+    feedbackUpdatedAt:row.FeedbackUpdatedAt ?? null
+  };
+}
+
+function sendCareError(res, error){
+  const number = getSqlErrorNumber(error);
+  const status = error.status === 400 || error.status === 403 ? error.status :
+    ([50071, 50072, 50073].includes(number) ? 403 :
+      (number === 51113 ? 404 : ([50074, 51110, 51111, 51112, 51114].includes(number) ? 400 : 500)));
+  return res.status(status).json({ message:error.message || 'No se pudo completar la solicitud.' });
+}
+
+/** GET /api/patients/birthdays */
+async function birthdays(req, res){
+  try{
+    const options = careRequestOptions(req);
+    const month = toBirthMonth(req.query?.month) ?? currentBirthMonth();
+    if(month === INVALID_NUMBER) throw careError('El mes debe estar entre 1 y 12.');
+    const result = await careSqlRequest(req, options)
+      .input('Month', req.sql.TinyInt, month)
+      .input('Query', req.sql.NVarChar(200), options.query)
+      .input('Skip', req.sql.Int, options.skip)
+      .input('Take', req.sql.Int, options.take)
+      .execute('spPatients_Birthdays');
+    const rows = result.recordset || [];
+    return res.json({
+      data:rows.map(mapCarePatient), total:Number(result.recordsets?.[1]?.[0]?.TotalCount ?? rows.length),
+      month, skip:options.skip, take:options.take
+    });
+  }catch(error){ return sendCareError(res, error); }
+}
+
+/** GET /api/patients/feedback */
+async function feedbackList(req, res){
+  try{
+    const options = careRequestOptions(req);
+    const rawContacted = req.query?.contacted;
+    let contacted = null;
+    if(rawContacted !== undefined && rawContacted !== ''){
+      if(!['true', 'false', '1', '0'].includes(String(rawContacted))) throw careError('Estado de seguimiento invalido.');
+      contacted = String(rawContacted) === 'true' || String(rawContacted) === '1';
+    }
+    const from = careDate(req.query?.deliveredFrom);
+    const to = careDate(req.query?.deliveredTo);
+    if(from && to && from > to) throw careError('La fecha inicial no puede ser mayor que la fecha final.');
+    const result = await careSqlRequest(req, options)
+      .input('Query', req.sql.NVarChar(200), options.query)
+      .input('Contacted', req.sql.Bit, contacted)
+      .input('DeliveredFrom', req.sql.Date, from)
+      .input('DeliveredTo', req.sql.Date, to)
+      .input('Skip', req.sql.Int, options.skip)
+      .input('Take', req.sql.Int, options.take)
+      .execute('spPatients_Feedback_List');
+    const rows = result.recordset || [];
+    return res.json({
+      data:rows.map(row=>({ ...mapCarePatient(row), deliveryDate:row.DeliveryDate, deliveredBy:row.DeliveredBy, ...feedbackFields(row) })),
+      total:Number(result.recordsets?.[1]?.[0]?.TotalCount ?? rows.length), skip:options.skip, take:options.take
+    });
+  }catch(error){ return sendCareError(res, error); }
+}
+
+/** PUT /api/patients/:id/feedback */
+async function saveFeedback(req, res){
+  try{
+    const options = careRequestOptions(req);
+    const patientId = Number(req.params.id);
+    if(!Number.isInteger(patientId) || patientId < 1 || patientId > 2147483647) throw careError('Paciente invalido.');
+    const body = req.body || {};
+    if(typeof body.contacted !== 'boolean') throw careError('Contactado debe ser verdadero o falso.');
+    if((body.message != null && typeof body.message !== 'string') || (body.notes != null && typeof body.notes !== 'string')) throw careError('Mensaje y notas deben ser texto.');
+    const message = toText(body.message);
+    const notes = toText(body.notes);
+    if((message?.length || 0) > 1000 || (notes?.length || 0) > 1000) throw careError('Mensaje y notas admiten hasta 1000 caracteres.');
+    const result = await careSqlRequest(req, options)
+      .input('PatientId', req.sql.Int, patientId)
+      .input('Message', req.sql.NVarChar(1000), message)
+      .input('Notes', req.sql.NVarChar(1000), notes)
+      .input('Contacted', req.sql.Bit, body.contacted)
+      .execute('spPatients_Feedback_Save');
+    const row = result.recordset?.[0];
+    if(!row) throw careError('No se encontro la orden.', 400);
+    return res.json({ patientId, ...feedbackFields(row) });
+  }catch(error){ return sendCareError(res, error); }
+}
+
 module.exports = {
+  birthdays,
+  feedbackList,
+  saveFeedback,
   create,
   update,
   search,

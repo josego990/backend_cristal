@@ -97,7 +97,7 @@ CREATE OR ALTER PROC [dbo].[spPatients_Create]
   @Rx_OI_Add NVARCHAR(20)=NULL,
   @Rx_OI_Alt NVARCHAR(20)=NULL,
 
-  @Rx_AV_OD_20 nvarchar(20), 
+  @Rx_AV_OD_20 nvarchar(20),
   @Rx_AV_OI_20 nvarchar(20),
 
   --nuevos campos receta inicial
@@ -313,7 +313,7 @@ BEGIN
         Rxi_AV_OI_20,
 
 
-     
+
 
 
       Frame, Dip, Material, Lens, Treatment, Products,
@@ -331,7 +331,7 @@ BEGIN
       @Rx_OD_Sphere, @Rx_OD_Cyl, @Rx_OD_Axis, @Rx_OD_Add, @Rx_OD_Alt,
       @Rx_OI_Sphere, @Rx_OI_Cyl, @Rx_OI_Axis, @Rx_OI_Add, @Rx_OI_Alt,
 
-      @Rx_AV_OD_20, 
+      @Rx_AV_OD_20,
         @Rx_AV_OI_20,
 
         --nuevos campos receta inicial
@@ -458,7 +458,7 @@ CREATE OR ALTER PROC [dbo].[spPatients_Update]
   @Rx_OI_Add NVARCHAR(20)=NULL,
   @Rx_OI_Alt NVARCHAR(20)=NULL,
 
-  @Rx_AV_OD_20 nvarchar(20), 
+  @Rx_AV_OD_20 nvarchar(20),
   @Rx_AV_OI_20 nvarchar(20),
 
 
@@ -1019,4 +1019,3 @@ WHERE p.object_id IN (
   AND p.name IN ('@AV_OD_SL', '@AV_OI_SL')
 ORDER BY Procedimiento, Parametro;
 GO
-
