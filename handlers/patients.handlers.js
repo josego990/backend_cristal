@@ -162,9 +162,11 @@ function mapPatientBody(b){
     OI_Add_Lensometry: toText(b.oi_adicion),
 
     AV_OD_20: toText(b.av_od_20),
+    AV_OD_SL: toText(b.av_od_sl),
     PH_OD_20: toText(b.ph_od_20),
     CC_OD_20: toText(b.cc_od_20),
     AV_OI_20: toText(b.av_oi_20),
+    AV_OI_SL: toText(b.av_oi_sl),
     PH_OI_20: toText(b.ph_oi_20),
     CC_OI_20: toText(b.cc_oi_20),
 
@@ -187,8 +189,8 @@ function mapPatientBody(b){
     Rx_OI_Add: toText(b.opto_oi_adicion),
     Rx_OI_Alt: toText(b.opto_oi_altura),
 
-    Rx_AV_OD_20: toText(b.av_od_20),
-    Rx_AV_OI_20: toText(b.av_oi_20),
+    Rx_AV_OD_20: toText(b.rx_av_od_20),
+    Rx_AV_OI_20: toText(b.rx_av_oi_20),
 
     //receta inicial
     Rxi_OD_Sphere: toText(b.rxiOdSphere),
@@ -268,9 +270,11 @@ async function create(req, res){
       .input('OI_Add_Lensometry', req.sql.NVarChar(20), p.OI_Add_Lensometry)
 
       .input('AV_OD_20', req.sql.NVarChar(20), p.AV_OD_20)
+      .input('AV_OD_SL', req.sql.NVarChar(20), p.AV_OD_SL)
       .input('PH_OD_20', req.sql.NVarChar(20), p.PH_OD_20)
       .input('CC_OD_20', req.sql.NVarChar(20), p.CC_OD_20)
       .input('AV_OI_20', req.sql.NVarChar(20), p.AV_OI_20)
+      .input('AV_OI_SL', req.sql.NVarChar(20), p.AV_OI_SL)
       .input('PH_OI_20', req.sql.NVarChar(20), p.PH_OI_20)
       .input('CC_OI_20', req.sql.NVarChar(20), p.CC_OI_20)
 
@@ -333,6 +337,8 @@ async function create(req, res){
       name: row.Name,
       profession: row.Profession ?? p.Profession,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
+      avOdSl: row.AV_OD_SL ?? null,
+      avOiSl: row.AV_OI_SL ?? null,
       products: fromJsonText(row.Products ?? p.ProductsJson, [])
     });
 
@@ -426,9 +432,11 @@ async function update(req, res){
       .input('OI_Add_Lensometry', req.sql.NVarChar(20), p.OI_Add_Lensometry)
 
       .input('AV_OD_20', req.sql.NVarChar(20), p.AV_OD_20)
+      .input('AV_OD_SL', req.sql.NVarChar(20), p.AV_OD_SL)
       .input('PH_OD_20', req.sql.NVarChar(20), p.PH_OD_20)
       .input('CC_OD_20', req.sql.NVarChar(20), p.CC_OD_20)
       .input('AV_OI_20', req.sql.NVarChar(20), p.AV_OI_20)
+      .input('AV_OI_SL', req.sql.NVarChar(20), p.AV_OI_SL)
       .input('PH_OI_20', req.sql.NVarChar(20), p.PH_OI_20)
       .input('CC_OI_20', req.sql.NVarChar(20), p.CC_OI_20)
 
@@ -489,6 +497,8 @@ async function update(req, res){
       name: row.Name,
       profession: row.Profession ?? p.Profession,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
+      avOdSl: row.AV_OD_SL ?? null,
+      avOiSl: row.AV_OI_SL ?? null,
       products: fromJsonText(row.Products ?? p.ProductsJson, [])
     });
 
@@ -533,6 +543,8 @@ async function search(req, res) {
       phone: x.Phone,
       balance: Number(x.Balance ?? 0),
       deliveredBy: x.DeliveredBy,
+      avOdSl: x.AV_OD_SL ?? null,
+      avOiSl: x.AV_OI_SL ?? null,
       idClinica: x.IdClinica ?? null,
       nombreClinica: x.NombreClinica ?? null
     })));
@@ -603,9 +615,11 @@ async function getById(req, res){
       oiAddLensometry: x.OI_Add_Lensometry,
 
       avOd20: x.AV_OD_20,
+      avOdSl: x.AV_OD_SL ?? null,
       phOd20: x.PH_OD_20,
       ccOd20: x.CC_OD_20,
       avOi20: x.AV_OI_20,
+      avOiSl: x.AV_OI_SL ?? null,
       phOi20: x.PH_OI_20,
       ccOi20: x.CC_OI_20,
 
@@ -710,6 +724,12 @@ async function getByOrder(req, res){
       profession: x.Profession,
       phone: x.Phone,
       optometrist: x.Optometrist,
+      avOd20: x.AV_OD_20,
+      avOi20: x.AV_OI_20,
+      avOdSl: x.AV_OD_SL ?? null,
+      avOiSl: x.AV_OI_SL ?? null,
+      rx_AV_OD_20: x.Rx_AV_OD_20,
+      rx_AV_OI_20: x.Rx_AV_OI_20,
       rxiOdSphere: x.Rxi_OD_Sphere,
       rxiOdCyl: x.Rxi_OD_Cyl,
       rxiOdAxis: x.Rxi_OD_Axis,
