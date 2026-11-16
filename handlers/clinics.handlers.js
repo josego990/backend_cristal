@@ -53,6 +53,8 @@ function sanitizeClinic(row) {
     telefono: toText(row?.Telefono ?? row?.telefono),
     logo: toText(row?.Logo ?? row?.logo),
     estado: toBit(row?.Estado ?? row?.estado) === 1,
+    seguimientoHabilitado: toBit(row?.SeguimientoHabilitado ?? row?.seguimientoHabilitado) !== 0,
+    cumpleanosHabilitado: toBit(row?.CumpleanosHabilitado ?? row?.cumpleanosHabilitado) !== 0,
     createdAt: row?.CreatedAt ?? row?.createdAt ?? null,
     updatedAt: row?.UpdatedAt ?? row?.updatedAt ?? null
   };
@@ -77,10 +79,14 @@ async function create(req, res) {
     const telefono = toText(b.telefono);
     const logo = toText(b.logo);
     const estado = hasOwn(b, 'estado') ? toBit(b.estado) : 1;
+    const seguimientoHabilitado = hasOwn(b, 'seguimientoHabilitado') ? toBit(b.seguimientoHabilitado) : 1;
+    const cumpleanosHabilitado = hasOwn(b, 'cumpleanosHabilitado') ? toBit(b.cumpleanosHabilitado) : 1;
 
     if (!codigo) return res.status(400).json({ message: 'codigo requerido' });
     if (!nombre) return res.status(400).json({ message: 'nombre requerido' });
     if (estado === null) return res.status(400).json({ message: 'estado invalido' });
+    if (seguimientoHabilitado === null) return res.status(400).json({ message: 'seguimientoHabilitado invalido' });
+    if (cumpleanosHabilitado === null) return res.status(400).json({ message: 'cumpleanosHabilitado invalido' });
 
     const r = await req.db
       .request()
@@ -89,6 +95,8 @@ async function create(req, res) {
       .input('telefono', req.sql.NVarChar(50), telefono)
       .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
       .input('Estado', req.sql.Bit, estado)
+      .input('SeguimientoHabilitado', req.sql.Bit, seguimientoHabilitado)
+      .input('CumpleanosHabilitado', req.sql.Bit, cumpleanosHabilitado)
       .execute('spClinics_Create');
 
     const row = {
@@ -98,6 +106,8 @@ async function create(req, res) {
       Telefono: telefono,
       Logo: logo,
       Estado: estado,
+      SeguimientoHabilitado: seguimientoHabilitado,
+      CumpleanosHabilitado: cumpleanosHabilitado,
       CreatedAt: null,
       UpdatedAt: null
     };
@@ -163,6 +173,8 @@ async function list(req, res) {
           Telefono,
           Logo,
           Estado,
+          SeguimientoHabilitado,
+          CumpleanosHabilitado,
           CreatedAt,
           UpdatedAt
         FROM dbo.Clinics
@@ -206,8 +218,10 @@ async function update(req, res) {
     const hasTelefono = hasOwn(b, 'telefono');
     const hasLogo = hasOwn(b, 'logo');
     const hasEstado = hasOwn(b, 'estado');
+    const hasSeguimientoHabilitado = hasOwn(b, 'seguimientoHabilitado');
+    const hasCumpleanosHabilitado = hasOwn(b, 'cumpleanosHabilitado');
 
-    if (!hasCodigo && !hasNombre && !hasTelefono && !hasLogo && !hasEstado) {
+    if (!hasCodigo && !hasNombre && !hasTelefono && !hasLogo && !hasEstado && !hasSeguimientoHabilitado && !hasCumpleanosHabilitado) {
       return res.status(400).json({ message: 'No hay campos para actualizar' });
     }
 
@@ -223,6 +237,8 @@ async function update(req, res) {
           Telefono,
           Logo,
           Estado,
+          SeguimientoHabilitado,
+          CumpleanosHabilitado,
           CreatedAt,
           UpdatedAt
         FROM dbo.Clinics
@@ -238,10 +254,14 @@ async function update(req, res) {
     const telefono = hasTelefono ? toText(b.telefono) : toText(current.Telefono);
     const logo = hasLogo ? toText(b.logo) : toText(current.Logo);
     const estado = hasEstado ? toBit(b.estado) : toBit(current.Estado);
+    const seguimientoHabilitado = hasSeguimientoHabilitado ? toBit(b.seguimientoHabilitado) : toBit(current.SeguimientoHabilitado ?? 1);
+    const cumpleanosHabilitado = hasCumpleanosHabilitado ? toBit(b.cumpleanosHabilitado) : toBit(current.CumpleanosHabilitado ?? 1);
 
     if (!codigo) return res.status(400).json({ message: 'codigo requerido' });
     if (!nombre) return res.status(400).json({ message: 'nombre requerido' });
     if (estado === null) return res.status(400).json({ message: 'estado invalido' });
+    if (seguimientoHabilitado === null) return res.status(400).json({ message: 'seguimientoHabilitado invalido' });
+    if (cumpleanosHabilitado === null) return res.status(400).json({ message: 'cumpleanosHabilitado invalido' });
 
     const r = await req.db
       .request()
@@ -251,6 +271,8 @@ async function update(req, res) {
       .input('telefono', req.sql.NVarChar(50), telefono)
       .input('Estado', req.sql.Bit, estado)
       .input('Logo', req.sql.NVarChar(req.sql.MAX), logo)
+      .input('SeguimientoHabilitado', req.sql.Bit, seguimientoHabilitado)
+      .input('CumpleanosHabilitado', req.sql.Bit, cumpleanosHabilitado)
       .execute('spClinics_Update');
 
     const row = {
@@ -260,6 +282,8 @@ async function update(req, res) {
       Telefono: telefono,
       Logo: logo,
       Estado: estado,
+      SeguimientoHabilitado: seguimientoHabilitado,
+      CumpleanosHabilitado: cumpleanosHabilitado,
       CreatedAt: current.CreatedAt,
       UpdatedAt: current.UpdatedAt
     };
@@ -355,6 +379,8 @@ async function listByUserId(req, res) {
           c.Telefono,
           c.Logo,
           c.Estado,
+          c.SeguimientoHabilitado,
+          c.CumpleanosHabilitado,
           c.CreatedAt,
           c.UpdatedAt
         FROM clinicIds ids

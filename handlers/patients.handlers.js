@@ -958,6 +958,28 @@ function careSqlRequest(req, options){
     .input('IdClinica', req.sql.Int, options.idClinica);
 }
 
+async function ensureCareModuleEnabled(req, options, column){
+  if(!options.idClinica) return;
+  const allowedColumns = new Set(['SeguimientoHabilitado', 'CumpleanosHabilitado']);
+  if(!allowedColumns.has(column)) throw new Error('Configuracion de modulo invalida.');
+  const result = await req.db.request()
+    .input('ClinicId', req.sql.Int, options.idClinica)
+    .query(`SELECT TOP (1) ${column} AS Enabled FROM dbo.Clinics WHERE ClinicId = @ClinicId AND Estado = 1`);
+  if(!result.recordset?.[0]) throw careError('La clinica indicada no esta activa.', 403);
+  if(!toBit(result.recordset[0].Enabled)) throw careError('Este modulo no esta habilitado para la clinica.', 403);
+}
+
+async function ensureCareModuleEnabled(req, options, column){
+  if(!options.idClinica) return;
+  const allowedColumns = new Set(['SeguimientoHabilitado', 'CumpleanosHabilitado']);
+  if(!allowedColumns.has(column)) throw new Error('Configuracion de modulo invalida.');
+  const result = await req.db.request()
+    .input('ClinicId', req.sql.Int, options.idClinica)
+    .query(`SELECT TOP (1) ${column} AS Enabled FROM dbo.Clinics WHERE ClinicId = @ClinicId AND Estado = 1`);
+  if(!result.recordset?.[0]) throw careError('La clinica indicada no esta activa.', 403);
+  if(!toBit(result.recordset[0].Enabled)) throw careError('Este modulo no esta habilitado para la clinica.', 403);
+}
+
 function careDate(value){
   if(value === undefined || value === null || value === '') return null;
   if(typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number(value.slice(0, 4)) < 1) throw careError('Fecha invalida.');
@@ -995,6 +1017,8 @@ function sendCareError(res, error){
 async function birthdays(req, res){
   try{
     const options = careRequestOptions(req);
+    await ensureCareModuleEnabled(req, options, 'CumpleanosHabilitado');
+    await ensureCareModuleEnabled(req, options, 'CumpleanosHabilitado');
     const period = currentBirthdayPeriod();
     const month = toBirthMonth(req.query?.month) ?? period.month;
     if(month === INVALID_NUMBER) throw careError('El mes debe estar entre 1 y 12.');
@@ -1017,6 +1041,8 @@ async function birthdays(req, res){
 async function saveBirthdayContact(req, res){
   try{
     const options = careRequestOptions(req);
+    await ensureCareModuleEnabled(req, options, 'CumpleanosHabilitado');
+    await ensureCareModuleEnabled(req, options, 'CumpleanosHabilitado');
     const patientId = Number(req.params.id);
     if(!Number.isInteger(patientId) || patientId < 1 || patientId > 2147483647) throw careError('Paciente invalido.');
     if(typeof req.body?.message !== 'string') throw careError('El mensaje debe ser texto.');
@@ -1041,6 +1067,8 @@ async function saveBirthdayContact(req, res){
 async function feedbackList(req, res){
   try{
     const options = careRequestOptions(req);
+    await ensureCareModuleEnabled(req, options, 'SeguimientoHabilitado');
+    await ensureCareModuleEnabled(req, options, 'SeguimientoHabilitado');
     const rawContacted = req.query?.contacted;
     let contacted = null;
     if(rawContacted !== undefined && rawContacted !== ''){
@@ -1070,6 +1098,8 @@ async function feedbackList(req, res){
 async function saveFeedback(req, res){
   try{
     const options = careRequestOptions(req);
+    await ensureCareModuleEnabled(req, options, 'SeguimientoHabilitado');
+    await ensureCareModuleEnabled(req, options, 'SeguimientoHabilitado');
     const patientId = Number(req.params.id);
     if(!Number.isInteger(patientId) || patientId < 1 || patientId > 2147483647) throw careError('Paciente invalido.');
     const body = req.body || {};
