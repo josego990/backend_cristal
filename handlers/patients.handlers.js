@@ -127,6 +127,14 @@ function fromJsonText(v, fallback = []){
   }
 }
 
+function patientDetailsValidationError(patient, body){
+  if(patient.Age === INVALID_NUMBER) return 'Edad debe ser un entero entre 0 y 150.';
+  const comments = body.comentarios_lab ?? body.labComments;
+  if(comments != null && typeof comments !== 'string') return 'Comentarios Lab. debe ser texto.';
+  if((patient.LabComments?.length || 0) > 2000) return 'Comentarios Lab. admite hasta 2000 caracteres.';
+  return '';
+}
+
 function mapPatientBody(b){
   return {
     ExamDate: toText(b.fecha),
@@ -135,6 +143,8 @@ function mapPatientBody(b){
     Profession: toText(b.profesion ?? b.profession),
     Phone: toText(b.telefono),
     BirthMonth: toBirthMonth(b.mes_nacimiento ?? b.birthMonth),
+    Age: toPatientAge(b.edad ?? b.age),
+    LabComments: toText(b.comentarios_lab ?? b.labComments),
     Optometrist: toText(b.opt || b['Opt.']),
     IdClinica: toClinicId(b.idClinica ?? b.clinicId ?? b.id_clinica),
 
@@ -228,6 +238,8 @@ async function create(req, res){
   try{
     const p = mapPatientBody(req.body || {});
     if(p.BirthMonth === INVALID_NUMBER) return res.status(400).json({ message:'Mes nacimiento debe estar entre 1 y 12.' });
+    const detailsError = patientDetailsValidationError(p, req.body || {});
+    if(detailsError) return res.status(400).json({ message:detailsError });
     if(!p.ExamDate || !p.Name){
       return res.status(400).json({ message: 'fecha y nombre son requeridos' });
     }
@@ -245,6 +257,8 @@ async function create(req, res){
       .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
       .input('BirthMonth', req.sql.TinyInt, p.BirthMonth)
+      .input('Age', req.sql.TinyInt, p.Age)
+      .input('LabComments', req.sql.NVarChar(2000), p.LabComments)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
 
@@ -340,6 +354,8 @@ async function create(req, res){
       name: row.Name,
       profession: row.Profession ?? p.Profession,
       birthMonth: row.BirthMonth ?? null,
+      age: row.Age ?? null,
+      labComments: row.LabComments ?? null,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       avOdSl: row.AV_OD_SL ?? null,
       avOiSl: row.AV_OI_SL ?? null,
@@ -356,7 +372,8 @@ async function create(req, res){
       50024,
       50025,
       50026,
-      50027
+      50027,
+      51117
     ].includes(number)){
       return res.status(400).json({ message: err.message || 'La clinica enviada no existe.' });
     }
@@ -395,6 +412,16 @@ async function update(req, res){
     if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'mes_nacimiento') && !Object.prototype.hasOwnProperty.call(req.body || {}, 'birthMonth')){
       p.BirthMonth = existing.recordset[0].BirthMonth ?? null;
     }
+    const detailsError = patientDetailsValidationError(p, req.body || {});
+    if(detailsError) return res.status(400).json({ message:detailsError });
+    if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'edad') && !Object.prototype.hasOwnProperty.call(req.body || {}, 'age')){
+      p.Age = existing.recordset[0].Age ?? null;
+    }
+    if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'comentarios_lab') && !Object.prototype.hasOwnProperty.call(req.body || {}, 'labComments')){
+      p.LabComments = existing.recordset[0].LabComments ?? null;
+    }
+    if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'av_od_sl')) p.AV_OD_SL = existing.recordset[0].AV_OD_SL ?? null;
+    if(!Object.prototype.hasOwnProperty.call(req.body || {}, 'av_oi_sl')) p.AV_OI_SL = existing.recordset[0].AV_OI_SL ?? null;
     if(!p.ExamDate || !p.Name){
       return res.status(400).json({ message: 'fecha y nombre son requeridos' });
     }
@@ -413,6 +440,8 @@ async function update(req, res){
       .input('Profession', req.sql.NVarChar(120), p.Profession)
       .input('Phone', req.sql.NVarChar(30), p.Phone)
       .input('BirthMonth', req.sql.TinyInt, p.BirthMonth)
+      .input('Age', req.sql.TinyInt, p.Age)
+      .input('LabComments', req.sql.NVarChar(2000), p.LabComments)
       .input('Optometrist', req.sql.NVarChar(50), p.Optometrist)
       .input('IdClinica', req.sql.Int, p.IdClinica)
 
@@ -506,6 +535,8 @@ async function update(req, res){
       name: row.Name,
       profession: row.Profession ?? p.Profession,
       birthMonth: row.BirthMonth ?? null,
+      age: row.Age ?? null,
+      labComments: row.LabComments ?? null,
       idClinica: row.IdClinica ?? p.IdClinica ?? null,
       avOdSl: row.AV_OD_SL ?? null,
       avOiSl: row.AV_OI_SL ?? null,
@@ -514,7 +545,7 @@ async function update(req, res){
 
   }catch(err){
     const number = getSqlErrorNumber(err);
-    if([50020,50021,50022,50023,50024,50025,50026,50027,50028].includes(number)){
+    if([50020,50021,50022,50023,50024,50025,50026,50027,50028,51117].includes(number)){
       return res.status(400).json({ message: err.message || 'No se pudo actualizar la orden.' });
     }
     return res.status(500).json({ message: err.message || 'Error' });
@@ -553,6 +584,8 @@ async function search(req, res) {
       phone: x.Phone,
       balance: Number(x.Balance ?? 0),
       birthMonth: x.BirthMonth ?? null,
+      age: x.Age ?? null,
+      labComments: x.LabComments ?? null,
       deliveredBy: x.DeliveredBy,
       avOdSl: x.AV_OD_SL ?? null,
       avOiSl: x.AV_OI_SL ?? null,
@@ -601,6 +634,8 @@ async function getById(req, res){
       profession: x.Profession,
       phone: x.Phone,
       birthMonth: x.BirthMonth ?? null,
+      age: x.Age ?? null,
+      labComments: x.LabComments ?? null,
       optometrist: x.Optometrist,
 
       isFirstExam: x.IsFirstExam,
@@ -736,6 +771,8 @@ async function getByOrder(req, res){
       profession: x.Profession,
       phone: x.Phone,
       birthMonth: x.BirthMonth ?? null,
+      age: x.Age ?? null,
+      labComments: x.LabComments ?? null,
       optometrist: x.Optometrist,
       avOd20: x.AV_OD_20,
       avOi20: x.AV_OI_20,
@@ -857,6 +894,14 @@ async function confirmDelivery(req, res){
   }
 }
 
+function toPatientAge(value){
+  if(value === null || value === undefined) return null;
+  if(typeof value !== 'number' && typeof value !== 'string') return INVALID_NUMBER;
+  if(String(value).trim() === '') return null;
+  const age = Number(value);
+  return Number.isInteger(age) && age >= 0 && age <= 150 ? age : INVALID_NUMBER;
+}
+
 function toBirthMonth(value){
   if(value === null || value === undefined) return null;
   if(typeof value !== 'number' && typeof value !== 'string') return INVALID_NUMBER;
@@ -865,8 +910,14 @@ function toBirthMonth(value){
   return Number.isInteger(month) && month >= 1 && month <= 12 ? month : INVALID_NUMBER;
 }
 
-function currentBirthMonth(){
-  return Number(new Intl.DateTimeFormat('en-US', { month:'numeric', timeZone:'America/Guatemala' }).format(new Date()));
+function currentBirthdayPeriod(){
+  const parts = new Intl.DateTimeFormat('en-US', {
+    month:'numeric', year:'numeric', timeZone:'America/Guatemala'
+  }).formatToParts(new Date());
+  return {
+    month:Number(parts.find(part=>part.type === 'month').value),
+    year:Number(parts.find(part=>part.type === 'year').value)
+  };
 }
 
 function careError(message, status=400){
@@ -936,7 +987,7 @@ function sendCareError(res, error){
   const number = getSqlErrorNumber(error);
   const status = error.status === 400 || error.status === 403 ? error.status :
     ([50071, 50072, 50073].includes(number) ? 403 :
-      (number === 51113 ? 404 : ([50074, 51110, 51111, 51112, 51114].includes(number) ? 400 : 500)));
+      (number === 51113 ? 404 : ([50074, 51110, 51111, 51112, 51114, 51115, 51116].includes(number) ? 400 : 500)));
   return res.status(status).json({ message:error.message || 'No se pudo completar la solicitud.' });
 }
 
@@ -944,10 +995,12 @@ function sendCareError(res, error){
 async function birthdays(req, res){
   try{
     const options = careRequestOptions(req);
-    const month = toBirthMonth(req.query?.month) ?? currentBirthMonth();
+    const period = currentBirthdayPeriod();
+    const month = toBirthMonth(req.query?.month) ?? period.month;
     if(month === INVALID_NUMBER) throw careError('El mes debe estar entre 1 y 12.');
     const result = await careSqlRequest(req, options)
       .input('Month', req.sql.TinyInt, month)
+      .input('ContactYear', req.sql.Int, period.year)
       .input('Query', req.sql.NVarChar(200), options.query)
       .input('Skip', req.sql.Int, options.skip)
       .input('Take', req.sql.Int, options.take)
@@ -955,7 +1008,31 @@ async function birthdays(req, res){
     const rows = result.recordset || [];
     return res.json({
       data:rows.map(mapCarePatient), total:Number(result.recordsets?.[1]?.[0]?.TotalCount ?? rows.length),
-      month, skip:options.skip, take:options.take
+      month, year:period.year, skip:options.skip, take:options.take
+    });
+  }catch(error){ return sendCareError(res, error); }
+}
+
+/** PUT /api/patients/:id/birthday-contact */
+async function saveBirthdayContact(req, res){
+  try{
+    const options = careRequestOptions(req);
+    const patientId = Number(req.params.id);
+    if(!Number.isInteger(patientId) || patientId < 1 || patientId > 2147483647) throw careError('Paciente invalido.');
+    if(typeof req.body?.message !== 'string') throw careError('El mensaje debe ser texto.');
+    const message = toText(req.body.message);
+    if(!message || message.length > 2000) throw careError('El mensaje es obligatorio y admite hasta 2000 caracteres.');
+    const year = currentBirthdayPeriod().year;
+    const result = await careSqlRequest(req, options)
+      .input('PatientId', req.sql.Int, patientId)
+      .input('ContactYear', req.sql.Int, year)
+      .input('Message', req.sql.NVarChar(2000), message)
+      .execute('spPatients_BirthdayContact_Save');
+    const row = result.recordset?.[0];
+    if(!row) throw new Error('No se pudo recuperar el contacto de cumpleanos.');
+    return res.json({
+      patientId, year:row.ContactYear, contacted:true,
+      contactedAt:row.ContactedAt, contactedBy:row.ContactedByName ?? null
     });
   }catch(error){ return sendCareError(res, error); }
 }
@@ -1015,6 +1092,7 @@ async function saveFeedback(req, res){
 
 module.exports = {
   birthdays,
+  saveBirthdayContact,
   feedbackList,
   saveFeedback,
   create,

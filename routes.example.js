@@ -39,6 +39,7 @@ module.exports = function registerRoutes(app, authMiddleware){
   app.get('/api/patients/:id', authMiddleware, patients.getById);
   app.put('/api/patients/:id', authMiddleware, patients.update);
   app.put('/api/patients/:id/feedback', authMiddleware, patients.saveFeedback);
+  app.put('/api/patients/:id/birthday-contact', authMiddleware, patients.saveBirthdayContact);
   app.put('/api/patients/:id/lab-code', authMiddleware, patients.updateLabCode);
   app.put('/api/patients/:id/assign-lab-code', authMiddleware, patients.assignLabCode);
   app.put('/api/patients/:id/deliver', authMiddleware, patients.confirmDelivery);

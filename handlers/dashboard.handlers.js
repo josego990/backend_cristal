@@ -125,7 +125,10 @@ async function summary(req, res){
     });
   }catch(err){
     const number = getSqlErrorNumber(err);
-    if(number === 50040 || number === 50041){
+    if(number === 50042){
+      return res.status(403).json({ message: err.message || 'El usuario no tiene asignada la clinica indicada.' });
+    }
+    if(number === 50040 || number === 50041 || number === 50043){
       return res.status(400).json({ message: err.message || 'Parametros invalidos para dashboard.' });
     }
     return res.status(500).json({ message: err.message || 'Error' });
